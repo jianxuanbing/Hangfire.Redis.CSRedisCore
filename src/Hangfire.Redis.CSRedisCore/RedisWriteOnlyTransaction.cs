@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using CSRedis;
+using Hangfire.Annotations;
+using Hangfire.Common;
 using Hangfire.States;
 using Hangfire.Storage;
 
@@ -31,94 +34,260 @@ namespace Hangfire.Redis
             _redisClientPipe = _storage.RedisClient.StartPipe();
         }
 
-        public override void ExpireJob(string jobId, TimeSpan expireIn)
+        /// <summary>
+        /// 添加列表到 Set
+        /// </summary>
+        /// <param name="key">键</param>
+        /// <param name="items">列表</param>
+        public override void AddRangeToSet([NotNull]string key, [NotNull] IList<string> items) => _redisClientPipe.ZAdd(_storage.GetRedisKey(key), items.Select(x => (0M, (object) x)).ToArray());
+
+        /// <summary>
+        /// 设置 Hash 过期时间
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="expireIn">过期时间</param>
+        public override void ExpireHash([NotNull] string key, TimeSpan expireIn) => _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
+
+        /// <summary>
+        /// 设置 List 过期时间
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="expireIn">过期时间</param>
+        public override void ExpireList([NotNull] string key, TimeSpan expireIn) => _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
+
+        /// <summary>
+        /// 设置 Set 过期时间
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="expireIn">过期时间</param>
+        public override void ExpireSet([NotNull] string key, TimeSpan expireIn) => _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
+
+        /// <summary>
+        /// 设置 Hash 持久保持
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        public override void PersistHash([NotNull] string key) => _redisClientPipe.Persist(_storage.GetRedisKey(key));
+
+        /// <summary>
+        /// 设置 List 持久保持
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        public override void PersistList([NotNull] string key) => _redisClientPipe.Persist(_storage.GetRedisKey(key));
+
+        /// <summary>
+        /// 设置 Set 持久保持
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        public override void PersistSet([NotNull] string key) => _redisClientPipe.Persist(_storage.GetRedisKey(key));
+
+        /// <summary>
+        /// 移除 Set
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        public override void RemoveSet([NotNull] string key) => _redisClientPipe.Del(_storage.GetRedisKey(key));
+
+        /// <summary>
+        /// 提交
+        /// </summary>
+        public override void Commit() => _redisClientPipe.EndPipe();
+
+        /// <summary>
+        /// 设置 作业 过期时间
+        /// </summary>
+        /// <param name="jobId">作业标识</param>
+        /// <param name="expireIn">过期时间</param>
+        public override void ExpireJob([NotNull] string jobId, TimeSpan expireIn)
         {
-            throw new NotImplementedException();
+            if (jobId == null) 
+                throw new ArgumentNullException(nameof(jobId));
+            _redisClientPipe.Expire(_storage.GetRedisKey($"job:{jobId}"), expireIn);
+            _redisClientPipe.Expire(_storage.GetRedisKey($"job:{jobId}:history"), expireIn);
+            _redisClientPipe.Expire(_storage.GetRedisKey($"job:{jobId}:state"), expireIn);
         }
 
-        public override void PersistJob(string jobId)
+        /// <summary>
+        /// 设置 作业 持久保持
+        /// </summary>
+        /// <param name="jobId">作业标识</param>
+        public override void PersistJob([NotNull] string jobId)
         {
-            throw new NotImplementedException();
+            if (jobId == null) 
+                throw new ArgumentNullException(nameof(jobId));
+            _redisClientPipe.Persist(_storage.GetRedisKey($"job:{jobId}"));
+            _redisClientPipe.Persist(_storage.GetRedisKey($"job:{jobId}:history"));
+            _redisClientPipe.Persist(_storage.GetRedisKey($"job:{jobId}:state"));
         }
 
-        public override void SetJobState(string jobId, IState state)
+        /// <summary>
+        /// 设置 作业 状态
+        /// </summary>
+        /// <param name="jobId">作业标识</param>
+        /// <param name="state">状态</param>
+        public override void SetJobState([NotNull] string jobId, [NotNull] IState state)
         {
-            throw new NotImplementedException();
+            if (jobId == null) 
+                throw new ArgumentNullException(nameof(jobId));
+            if (state == null) 
+                throw new ArgumentNullException(nameof(state));
+            _redisClientPipe.HSet(_storage.GetRedisKey($"job:{jobId}"), "State", state.Name);
+            _redisClientPipe.Del(_storage.GetRedisKey($"job:{jobId}:state"));
+            var storedData = new Dictionary<string, string>(state.SerializeData())
+            {
+                { "State", state.Name }
+            };
+
+            if (state.Reason != null)
+                storedData.Add("Reason", state.Reason);
+
+            _redisClientPipe.HMSet(_storage.GetRedisKey($"job:{jobId}:state"), storedData.DicToObjectArray());
+            AddJobState(jobId, state);
         }
 
-        public override void AddJobState(string jobId, IState state)
+        /// <summary>
+        /// 添加 作业 状态
+        /// </summary>
+        /// <param name="jobId">作业标识</param>
+        /// <param name="state">状态</param>
+        public override void AddJobState([NotNull] string jobId, [NotNull] IState state)
         {
-            throw new NotImplementedException();
+            if (jobId == null)
+                throw new ArgumentNullException(nameof(jobId));
+            if (state == null)
+                throw new ArgumentNullException(nameof(state));
+            var storedData = new Dictionary<string, string>(state.SerializeData())
+            {
+                { "State", state.Name },
+                { "Reason", state.Reason },
+                { "CreatedAt", JobHelper.SerializeDateTime(DateTime.UtcNow) }
+            };
+
+            _redisClientPipe.RPush(_storage.GetRedisKey($"job:{jobId}:history"), SerializationHelper.Serialize(storedData));
         }
 
-        public override void AddToQueue(string queue, string jobId)
+        /// <summary>
+        /// 添加到队列
+        /// </summary>
+        /// <param name="queue">队列</param>
+        /// <param name="jobId">作业标识</param>
+        public override void AddToQueue([NotNull] string queue, [NotNull] string jobId)
         {
-            throw new NotImplementedException();
+            if (queue == null) 
+                throw new ArgumentNullException(nameof(queue));
+            if (jobId == null) 
+                throw new ArgumentNullException(nameof(jobId));
+            _redisClientPipe.SAdd(_storage.GetRedisKey("queues"), queue);
+            if (_storage.LifoQueues != null && _storage.LifoQueues.Contains(queue, StringComparer.OrdinalIgnoreCase))
+                _redisClientPipe.RPush(_storage.GetRedisKey($"queue:{queue}"), jobId);
+            else
+                _redisClientPipe.LPush(_storage.GetRedisKey($"queue:{queue}"), jobId);
+            _redisClientPipe.Publish(_storage.SubscriptionChannel, jobId);
         }
 
-        public override void IncrementCounter(string key)
+        /// <summary>
+        /// 递增计数器
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        public override void IncrementCounter([NotNull] string key) => _redisClientPipe.IncrBy(_storage.GetRedisKey(key));
+
+        /// <summary>
+        /// 递增计数器
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="expireIn">过期时间</param>
+        public override void IncrementCounter([NotNull] string key, TimeSpan expireIn)
         {
-            throw new NotImplementedException();
+            _redisClientPipe.IncrBy(_storage.GetRedisKey(key));
+            _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
         }
 
-        public override void IncrementCounter(string key, TimeSpan expireIn)
+        /// <summary>
+        /// 递减计数器
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        public override void DecrementCounter([NotNull] string key) => _redisClientPipe.IncrBy(_storage.GetRedisKey(key), -1);
+
+        /// <summary>
+        /// 递减计数器
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="expireIn">过期时间</param>
+        public override void DecrementCounter([NotNull] string key, TimeSpan expireIn)
         {
-            throw new NotImplementedException();
+            _redisClientPipe.IncrBy(_storage.GetRedisKey(key),-1);
+            _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
         }
 
-        public override void DecrementCounter(string key)
+        /// <summary>
+        /// 添加到 Set
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="value">值</param>
+        public override void AddToSet([NotNull] string key, [NotNull] string value) => AddToSet(key, value, 0);
+
+        /// <summary>
+        /// 添加到 Set
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="value">值</param>
+        /// <param name="score">分数</param>
+        public override void AddToSet([NotNull] string key, [NotNull] string value, double score)
         {
-            throw new NotImplementedException();
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+            _redisClientPipe.ZAdd(_storage.GetRedisKey(key), ((decimal) score, value));
         }
 
-        public override void DecrementCounter(string key, TimeSpan expireIn)
+        /// <summary>
+        /// 从 Set 中移除
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="value">值</param>
+        public override void RemoveFromSet([NotNull] string key, [NotNull] string value)
         {
-            throw new NotImplementedException();
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+            _redisClientPipe.ZRem(_storage.GetRedisKey(key), value);
         }
 
-        public override void AddToSet(string key, string value)
+        /// <summary>
+        /// 插入到 List
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="value">值</param>
+        public override void InsertToList([NotNull] string key, string value) => _redisClientPipe.LPush(_storage.GetRedisKey(key), value);
+
+        /// <summary>
+        /// 从 List 中移除
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="value">值</param>
+        public override void RemoveFromList([NotNull] string key, string value) => _redisClientPipe.LRem(_storage.GetRedisKey(key), 0, value);
+
+        /// <summary>
+        /// 清空列表
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="keepStartingFrom">开始范围</param>
+        /// <param name="keepEndingAt">结束范围</param>
+        public override void TrimList([NotNull] string key, int keepStartingFrom, int keepEndingAt) => _redisClientPipe.LTrim(_storage.GetRedisKey(key), keepStartingFrom, keepEndingAt);
+
+        /// <summary>
+        /// 设置范围列表到 Hash 
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="keyValuePairs">键值对集合</param>
+        public override void SetRangeInHash([NotNull] string key, [NotNull] IEnumerable<KeyValuePair<string, string>> keyValuePairs)
         {
-            throw new NotImplementedException();
+            if (keyValuePairs == null)
+                throw new ArgumentNullException(nameof(keyValuePairs));
+            _redisClientPipe.HMSet(_storage.GetRedisKey(key), keyValuePairs.DicToObjectArray());
         }
 
-        public override void AddToSet(string key, string value, double score)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void RemoveFromSet(string key, string value)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void InsertToList(string key, string value)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void RemoveFromList(string key, string value)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void TrimList(string key, int keepStartingFrom, int keepEndingAt)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void RemoveHash(string key)
-        {
-        }
-
-        public override void Commit()
-        {
-            throw new NotImplementedException();
-        }
+        /// <summary>
+        /// 移除 Hash
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        public override void RemoveHash([NotNull] string key) => _redisClientPipe.Del(_storage.GetRedisKey(key));
 
         /// <summary>
         /// 释放资源
