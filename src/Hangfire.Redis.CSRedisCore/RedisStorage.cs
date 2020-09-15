@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Hangfire.Annotations;
+using Hangfire.Dashboard;
 using Hangfire.Logging;
 using Hangfire.Redis.States;
 using Hangfire.Server;
@@ -29,10 +31,16 @@ namespace Hangfire.Redis
         /// </summary>
         public CSRedis.CSRedisClient RedisClient { get; }
 
+        /// <summary>
+        /// 初始化一个<see cref="RedisClient"/>类型的实例
+        /// </summary>
+        /// <param name="redisClient">Redis客户端</param>
+        /// <param name="options">Redis存储选项配置</param>
         public RedisStorage(CSRedis.CSRedisClient redisClient, RedisStorageOptions options = null)
         {
             RedisClient = redisClient;
-            this._options = options ?? new RedisStorageOptions();
+            _options = options ?? new RedisStorageOptions();
+            _subscription = new RedisSubscription(this, redisClient);
         }
 
         /// <summary>
@@ -75,7 +83,9 @@ namespace Hangfire.Redis
         /// </summary>
         public override IEnumerable<IServerComponent> GetComponents()
         {
-            return base.GetComponents();
+            yield return new FetchedJobsWatcher(this,_options.InvisibilityTimeout);
+            yield return new ExpiredJobsWatcher(this, _options.ExpiryCheckInterval);
+            yield return _subscription;
         }
 
         /// <summary>
@@ -88,8 +98,6 @@ namespace Hangfire.Redis
             yield return new SucceededStateHandler();
             yield return new DeletedStateHandler();
         }
-
-
 
         /// <summary>
         /// 将选项配置输出到日志
@@ -114,6 +122,23 @@ namespace Hangfire.Redis
             if (key == null)
                 throw new ArgumentNullException(nameof(key));
             return _options.Prefix + key;
+        }
+
+        /// <summary>
+        /// 获取仪表板指标
+        /// </summary>
+        /// <param name="title">标题</param>
+        /// <param name="key">缓存键</param>
+        public static DashboardMetric GetDashboardMetricFromRedisInfo(string title, string key)
+        {
+            return new DashboardMetric($"redis:{key}",title, (razorPage) =>
+            {
+                using (var redisCnn=razorPage.Storage.GetConnection())
+                {
+                    var rawInfo = (redisCnn as RedisConnection).RedisClient.NodesServerManager.Info().ToDictionary(r=>r.node,r=>r.value);
+                    return new Metric(rawInfo[key]);
+                }
+            });
         }
     }
 }
