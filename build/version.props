@@ -16,7 +16,7 @@
     <RepositoryUrl>https://github.com/jianxuanbing/Hangfire.Redis.CSRedisCore</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>Hangfire Redis;CSRedisCore</PackageTags>
-    <PackageReleaseNotes>基于CSRedisCCode的Hangfire Redis存储</PackageReleaseNotes>
+    <PackageReleaseNotes>基于CSRedisCore的Hangfire Redis存储</PackageReleaseNotes>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 </Project>
