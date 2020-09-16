@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <VersionMajor>0</VersionMajor>
+    <VersionMinor>0</VersionMinor>
+    <VersionPatch>1</VersionPatch>
+    <VersionQuality>20200916-1</VersionQuality>
+    <VersionPrefix>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionPrefix>
+    <VersionSuffix>preview-$(VersionQuality)</VersionSuffix>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Authors>简玄冰</Authors>
+    <Company>简玄冰</Company>
+    <Copyright>简玄冰</Copyright>
+    <PackageLicenseUrl>https://github.com/jianxuanbing/Hangfire.Redis.CSRedisCore/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/jianxuanbing/Hangfire.Redis.CSRedisCore</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jianxuanbing/Hangfire.Redis.CSRedisCore</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>Hangfire Redis;CSRedisCore</PackageTags>
+    <PackageReleaseNotes>基于CSRedisCCode的Hangfire Redis存储</PackageReleaseNotes>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

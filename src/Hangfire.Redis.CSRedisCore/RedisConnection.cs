@@ -74,7 +74,7 @@ namespace Hangfire.Redis
                 throw new ArgumentNullException(nameof(context));
             var pipe = RedisClient.StartPipe()
                 .SAdd(_storage.GetRedisKey("servers"), serverId)
-                .HMSet(_storage.GetRedisKey($"server:{serverId}"), new Dictionary<string, string>()
+                .HMSet(_storage.GetRedisKey($"server:{serverId}"), new Dictionary<string, string>
                 {
                     {"WorkerCount", context.WorkerCount.ToString(CultureInfo.InvariantCulture)},
                     {"StartedAt", JobHelper.SerializeDateTime(DateTime.UtcNow)},

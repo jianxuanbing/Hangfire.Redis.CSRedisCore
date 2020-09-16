@@ -5,7 +5,13 @@ VisualStudioVersion = 16.0.30320.27
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hangfire.Redis.CSRedisCore", "src\Hangfire.Redis.CSRedisCore\Hangfire.Redis.CSRedisCore.csproj", "{5D26FEC1-3AF9-4719-8E91-3BC02CE67D5A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hangfire.Redis.CSRedisCore.Tests", "tests\Hangfire.Redis.CSRedisCore.Tests\Hangfire.Redis.CSRedisCore.Tests.csproj", "{CD64A934-896F-401C-9E3E-AC52750EB17D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hangfire.Redis.CSRedisCore.Tests", "tests\Hangfire.Redis.CSRedisCore.Tests\Hangfire.Redis.CSRedisCore.Tests.csproj", "{CD64A934-896F-401C-9E3E-AC52750EB17D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Project Items", "Project Items", "{926D8582-BCF7-4D50-9D86-71D2051F67E4}"
+	ProjectSection(SolutionItems) = preProject
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

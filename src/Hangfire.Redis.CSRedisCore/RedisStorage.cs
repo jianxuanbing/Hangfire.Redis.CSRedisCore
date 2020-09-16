@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using CSRedis;
 using Hangfire.Annotations;
 using Hangfire.Dashboard;
 using Hangfire.Logging;
@@ -29,14 +30,34 @@ namespace Hangfire.Redis
         /// <summary>
         /// Redis客户端
         /// </summary>
-        public CSRedis.CSRedisClient RedisClient { get; }
+        public CSRedisClient RedisClient { get; }
+
+        /// <summary>
+        /// 初始化一个<see cref="RedisClient"/>类型的实例
+        /// </summary>
+        public RedisStorage() : this("localhost:6379") { }
+
+        /// <summary>
+        /// 初始化一个<see cref="RedisClient"/>类型的实例
+        /// </summary>
+        /// <param name="connectionString">连接字符串</param>
+        /// <param name="options">Redis存储选项配置</param>
+        public RedisStorage(string connectionString, RedisStorageOptions options = null)
+        {
+            if (connectionString == null)
+                throw new ArgumentNullException(nameof(connectionString));
+            // TODO: 此处需要对连接字符串进行解析
+            _options = options ?? new RedisStorageOptions();
+            RedisClient = new CSRedisClient(connectionString);
+            _subscription = new RedisSubscription(this, RedisClient);
+        }
 
         /// <summary>
         /// 初始化一个<see cref="RedisClient"/>类型的实例
         /// </summary>
         /// <param name="redisClient">Redis客户端</param>
         /// <param name="options">Redis存储选项配置</param>
-        public RedisStorage(CSRedis.CSRedisClient redisClient, RedisStorageOptions options = null)
+        public RedisStorage(CSRedisClient redisClient, RedisStorageOptions options = null)
         {
             RedisClient = redisClient;
             _options = options ?? new RedisStorageOptions();
@@ -64,11 +85,6 @@ namespace Hangfire.Redis
         internal string[] LifoQueues => _options.LifoQueues;
 
         /// <summary>
-        /// 启用事务
-        /// </summary>
-        internal bool UseTransactions => _options.UseTransactions;
-
-        /// <summary>
         /// 获取监控API
         /// </summary>
         public override IMonitoringApi GetMonitoringApi() => new RedisMonitoringApi(this, RedisClient);
@@ -83,7 +99,7 @@ namespace Hangfire.Redis
         /// </summary>
         public override IEnumerable<IServerComponent> GetComponents()
         {
-            yield return new FetchedJobsWatcher(this,_options.InvisibilityTimeout);
+            yield return new FetchedJobsWatcher(this, _options.InvisibilityTimeout);
             yield return new ExpiredJobsWatcher(this, _options.ExpiryCheckInterval);
             yield return _subscription;
         }
@@ -131,14 +147,14 @@ namespace Hangfire.Redis
         /// <param name="key">缓存键</param>
         public static DashboardMetric GetDashboardMetricFromRedisInfo(string title, string key)
         {
-            return new DashboardMetric($"redis:{key}",title, (razorPage) =>
-            {
-                using (var redisCnn=razorPage.Storage.GetConnection())
-                {
-                    var rawInfo = (redisCnn as RedisConnection).RedisClient.NodesServerManager.Info().ToDictionary(r=>r.node,r=>r.value);
-                    return new Metric(rawInfo[key]);
-                }
-            });
+            return new DashboardMetric($"redis:{key}", title, (razorPage) =>
+             {
+                 using (var redisCnn = razorPage.Storage.GetConnection())
+                 {
+                     var rawInfo = (redisCnn as RedisConnection).RedisClient.NodesServerManager.Info().ToDictionary(r => r.node, r => r.value);
+                     return new Metric(rawInfo[key]);
+                 }
+             });
         }
     }
 }

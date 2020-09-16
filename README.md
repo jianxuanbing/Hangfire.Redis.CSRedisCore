@@ -1,2 +1,2 @@
-# Hangfire.Redis.CSRedis
+# Hangfire.Redis.CSRedisCore
 Hangfire.Redis.CSRedis

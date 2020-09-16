@@ -25,7 +25,6 @@ namespace Hangfire.Redis
             SucceededListSize = 499;
             DeletedListSize = 499;
             LifoQueues = new string[0];
-            UseTransactions = true;
         }
 
         /// <summary>
@@ -67,10 +66,5 @@ namespace Hangfire.Redis
         /// Lifo(后进先出)队列
         /// </summary>
         public string[] LifoQueues { get; set; }
-
-        /// <summary>
-        /// 启用事务
-        /// </summary>
-        public bool UseTransactions { get; set; }
     }
 }
