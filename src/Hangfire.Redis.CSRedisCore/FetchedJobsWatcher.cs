@@ -46,7 +46,7 @@ namespace Hangfire.Redis
         /// <param name="options">拉取作业观察者选项配置</param>
         public FetchedJobsWatcher(RedisStorage storage, TimeSpan invisibilityTimeout, FetchedJobsWatcherOptions options)
         {
-            if (invisibilityTimeout.Ticks < 0)
+            if (invisibilityTimeout.Ticks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(invisibilityTimeout), "Invisibility timeout duration should be positive.");
             _storage = storage ?? throw new ArgumentNullException(nameof(storage));
             _options = options ?? throw new ArgumentNullException(nameof(options));

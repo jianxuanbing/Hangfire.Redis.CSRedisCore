@@ -44,7 +44,7 @@ namespace Hangfire.Redis
         /// <param name="checkInterval">检查间隔</param>
         public ExpiredJobsWatcher(RedisStorage storage, TimeSpan checkInterval)
         {
-            if (checkInterval.Ticks < 0)
+            if (checkInterval.Ticks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(checkInterval), "Check interval should be positive.");
             _storage = storage ?? throw new ArgumentNullException(nameof(storage));
             _checkInterval = checkInterval;
