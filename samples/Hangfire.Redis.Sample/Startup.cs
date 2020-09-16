@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -20,6 +22,7 @@ namespace Hangfire.Redis.Sample
             });
             services.AddHangfire(o => { o.UseStorage(storage); });
             JobStorage.Current = storage;
+
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -55,10 +58,7 @@ namespace Hangfire.Redis.Sample
                 IsReadOnlyFunc = context => false,
             });
             app.UseHangfireServer();
-            app.Run(async (context) =>
-            {
-                await context.Response.WriteAsync("Hello World!");
-            });
+            RecurringJob.AddOrUpdate(() => Debug.WriteLine($"输出内容：{DateTime.Now:yyyy-MM-dd HH:mm:ss.sss}"), "*/1 * * * * ? ", TimeZoneInfo.Local);
         }
     }
 }

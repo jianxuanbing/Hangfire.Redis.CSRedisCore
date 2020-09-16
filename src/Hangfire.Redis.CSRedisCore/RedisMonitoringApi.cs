@@ -195,43 +195,40 @@ namespace Hangfire.Redis
             UseConnection(redis =>
             {
                 var stats = new StatisticsDto();
+                
+                var queues = redis.SMembers(_storage.GetRedisKey("queues"));
+                using (var pipe = redis.StartPipe())
+                {
+                    pipe.SCard(_storage.GetRedisKey("servers"))
+                        .SCard(_storage.GetRedisKey("queues"))
+                        .ZCard(_storage.GetRedisKey("schedule"))
+                        .ZCard(_storage.GetRedisKey("processing"))
+                        .Get(_storage.GetRedisKey("stats:succeeded"))
+                        .ZCard(_storage.GetRedisKey("failed"))
+                        .Get(_storage.GetRedisKey("stats:deleted"))
+                        .ZCard(_storage.GetRedisKey("recurring-jobs"));
+                    foreach (var queue in queues)
+                    {
+                        pipe.LLen(_storage.GetRedisKey($"queue:{queue}"));
+                    }
 
-                //var queues = redis.SMembers(_storage.GetRedisKey("queues"));
-                //var tasks = new Task[queues.Length + 8];
-
-                //tasks[0] = redis.SCardAsync(_storage.GetRedisKey("servers"))
-                //    .ContinueWith(x => stats.Servers = x.Result);
-
-                //tasks[1] = redis.SCardAsync(_storage.GetRedisKey("queues"))
-                //    .ContinueWith(x => stats.Queues = x.Result);
-
-                //tasks[2] = redis.ZCardAsync(_storage.GetRedisKey("schedule"))
-                //    .ContinueWith(x => stats.Scheduled = x.Result);
-
-                //tasks[3] = redis.ZCardAsync(_storage.GetRedisKey("processing"))
-                //    .ContinueWith(x => stats.Processing = x.Result);
-
-                //tasks[4] = redis.GetAsync(_storage.GetRedisKey("stats:succeeded"))
-                //    .ContinueWith(x => stats.Succeeded = long.Parse(string.IsNullOrWhiteSpace(x.Result) ? (string)x.Result : "0"));
-
-                //tasks[5] = redis.ZCardAsync(_storage.GetRedisKey("failed"))
-                //    .ContinueWith(x => stats.Failed = x.Result);
-
-                //tasks[6] = redis.GetAsync(_storage.GetRedisKey("stats:deleted"))
-                //    .ContinueWith(x => stats.Deleted = long.Parse(string.IsNullOrWhiteSpace(x.Result) ? (string)x.Result : "0"));
-
-                //tasks[7] = redis.ZCardAsync(_storage.GetRedisKey("recurring-jobs"))
-                //    .ContinueWith(x => stats.Recurring = x.Result);
-
-                //var i = 8;
-                //foreach (var queue in queues)
-                //{
-                //    tasks[i] = redis.LLenAsync(_storage.GetRedisKey($"queue:{queue}"))
-                //        .ContinueWith(x => { lock (stats) { stats.Enqueued += x.Result; } });
-                //    i++;
-                //}
-
-                //Task.WaitAll(tasks);
+                    var result = pipe.EndPipe();
+                    if (result.Length >= 8)
+                    {
+                        stats.Servers = result[0] == null ? 0 : Convert.ToInt64(result[0]);
+                        stats.Queues = result[1] == null ? 0 : Convert.ToInt64(result[1]);
+                        stats.Scheduled = result[2] == null ? 0 : Convert.ToInt64(result[2]);
+                        stats.Processing = result[3] == null ? 0 : Convert.ToInt64(result[3]);
+                        stats.Succeeded = result[4] == null ? 0 : Convert.ToInt64(result[4]);
+                        stats.Failed = result[5] == null ? 0 : Convert.ToInt64(result[5]);
+                        stats.Deleted = result[6] == null ? 0 : Convert.ToInt64(result[6]);
+                        stats.Recurring = result[7] == null ? 0 : Convert.ToInt64(result[7]);
+                        for (var i = 8; i < result.Length; i++)
+                        {
+                            stats.Enqueued += Convert.ToInt64(result[i]);
+                        }
+                    }
+                }
 
                 return stats;
             });
