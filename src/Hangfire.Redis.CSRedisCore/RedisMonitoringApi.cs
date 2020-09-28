@@ -108,7 +108,7 @@ namespace Hangfire.Redis
 
                 foreach (var serverName in serverNames)
                 {
-                    var queue = redis.LRange(_storage.GetRedisKey($"server:{serverName}:queues"), 1, -1);
+                    var queue = redis.LRange(_storage.GetRedisKey($"server:{serverName}:queues"), 0, -1);
 
                     var server = redis.HMGet(_storage.GetRedisKey($"server:{serverName}"), new string[] { "WorkerCount", "StartedAt", "Heartbeat" });
                     if (server[0] == null)

@@ -18,7 +18,7 @@ namespace Hangfire.Redis.Sample
         {
             var storage = new RedisStorage("127.0.0.1:6379,defaultDatabase=1,poolsize=50", new RedisStorageOptions
             {
-                Prefix = "hangfire.dev"
+                Prefix = "hangfire.dev:"
             });
             services.AddHangfire(o => { o.UseStorage(storage); });
             JobStorage.Current = storage;
@@ -57,8 +57,11 @@ namespace Hangfire.Redis.Sample
                 DisplayStorageConnectionString = false, // 是否显示数据库连接信息
                 IsReadOnlyFunc = context => false,
             });
-            app.UseHangfireServer();
-            RecurringJob.AddOrUpdate(() => Debug.WriteLine($"输出内容：{DateTime.Now:yyyy-MM-dd HH:mm:ss.sss}"), "*/1 * * * * ? ", TimeZoneInfo.Local);
+            app.UseHangfireServer(new BackgroundJobServerOptions
+            {
+                Queues = new []{"dev","test","pred","prod","default"}
+            });
+            RecurringJob.AddOrUpdate(() => Console.WriteLine($"输出内容：{DateTime.Now:yyyy-MM-dd HH:mm:ss.sss}"), "*/1 * * * * ? ", TimeZoneInfo.Local);
         }
     }
 }
