@@ -336,17 +336,16 @@ namespace Hangfire.Redis
                 var i = 0;
                 foreach (var scheduledJob in scheduledJobs)
                 {
-                    var jobId = scheduledJob;
+                    var jobId = scheduledJob.member;
                     var v1 = _redisClient.HMGet(
-                        _storage.GetRedisKey($"job:{jobId}"),
-                        new string[] {"Type", "Method", "ParameterTypes", "Arguments"});
+                        _storage.GetRedisKey($"job:{jobId}"), "Type", "Method", "ParameterTypes", "Arguments");
 
-                    jobs.TryAdd(jobId.member, v1.ToList());
+                    jobs.TryAdd(jobId, v1.ToList());
                     i++;
                     var v2 = _redisClient.HMGet(
                         _storage.GetRedisKey($"job:{jobId}:state"),
                         new string[] {"State", "ScheduledAt"});
-                    states.TryAdd(jobId.member, v2.ToList());
+                    states.TryAdd(jobId, v2.ToList());
                     i++;
                 }
 
