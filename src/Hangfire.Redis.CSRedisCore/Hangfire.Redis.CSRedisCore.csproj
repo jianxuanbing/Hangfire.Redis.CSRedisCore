@@ -22,7 +22,7 @@ See http://hangfire.io/ for some more info on the main project
 
   <ItemGroup>
     <PackageReference Include="CSRedisCore" Version="3.6.5" />
-    <PackageReference Include="Hangfire.Core" Version="1.7.12" />
+    <PackageReference Include="Hangfire.Core" Version="1.7.17" />
   </ItemGroup>
 
   <ItemGroup>

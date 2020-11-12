@@ -317,14 +317,14 @@ namespace Hangfire.Redis
             });
 
         /// <summary>
-        /// 已调度的作业
+        /// 计划的作业
         /// </summary>
         /// <param name="from">开始范围</param>
         /// <param name="count">数量</param>
         public JobList<ScheduledJobDto> ScheduledJobs(int @from, int count) =>
             UseConnection(redis =>
             {
-                var scheduledJobs = redis.ZRangeByScoreWithScores(_storage.GetRedisKey("schedule"), @from, @from + count - 1);
+                var scheduledJobs = redis.ZRangeByScoreWithScores(_storage.GetRedisKey("schedule"), "-inf", "+inf", count, @from);
                 if (scheduledJobs.Length == 0)
                 {
                     return new JobList<ScheduledJobDto>(new List<KeyValuePair<string, ScheduledJobDto>>());
