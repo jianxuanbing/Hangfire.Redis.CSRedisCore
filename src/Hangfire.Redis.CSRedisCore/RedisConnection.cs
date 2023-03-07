@@ -206,8 +206,19 @@ namespace Hangfire.Redis
         /// <param name="fromScore">开始范围</param>
         /// <param name="toScore">结束范围</param>
         public override string GetFirstByLowestScoreFromSet([NotNull] string key, double fromScore, double toScore) =>
-            RedisClient.ZRangeByScore(_storage.GetRedisKey(key), (decimal)fromScore, (decimal)toScore, 1, 0)
+            RedisClient.ZRangeByScore(_storage.GetRedisKey(key), (decimal)fromScore, (decimal)toScore, count: 1, offset: 0)
                 .FirstOrDefault();
+
+        /// <summary>
+        /// 获取指定范围内最小值的集合
+        /// </summary>
+        /// <param name="key">缓存键</param>
+        /// <param name="fromScore">开始范围</param>
+        /// <param name="toScore">结束范围</param>
+        /// <param name="count">数量</param>
+        public override List<string> GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore, int count) =>
+            RedisClient.ZRangeByScore(_storage.GetRedisKey(key), (decimal)fromScore, (decimal)toScore, count: count, offset: 0)
+                .ToList();
 
         /// <summary>
         /// 获取 Hash 计数器
@@ -321,7 +332,7 @@ namespace Hangfire.Redis
         /// <param name="jobId">作业标识</param>
         public override StateData GetStateData([NotNull] string jobId)
         {
-            if(jobId==null)
+            if (jobId == null)
                 throw new ArgumentNullException(nameof(jobId));
             var entries = RedisClient.HGetAll(_storage.GetRedisKey($"job:{jobId}:state"));
             if (entries.Count == 0)
@@ -347,7 +358,7 @@ namespace Hangfire.Redis
         /// <param name="name">名称</param>
         public override string GetValueFromHash([NotNull] string key, [NotNull] string name)
         {
-            if(name==null)
+            if (name == null)
                 throw new ArgumentNullException(nameof(name));
             return RedisClient.HGet(_storage.GetRedisKey(key), name);
         }
@@ -369,7 +380,7 @@ namespace Hangfire.Redis
         /// <param name="serverId">服务器标识</param>
         public override void RemoveServer([NotNull] string serverId)
         {
-            if(serverId==null)
+            if (serverId == null)
                 throw new ArgumentNullException(nameof(serverId));
             RedisClient.StartPipe()
                 .SRem(_storage.GetRedisKey("servers"), serverId)
@@ -390,7 +401,7 @@ namespace Hangfire.Redis
 
             foreach (var serverName in serverNames)
             {
-                var srv = RedisClient.HMGet(_storage.GetRedisKey($"server:{serverName}"), new[] {"StartedAt", "Heartbeat"});
+                var srv = RedisClient.HMGet(_storage.GetRedisKey($"server:{serverName}"), new[] { "StartedAt", "Heartbeat" });
                 heartbeats.Add(serverName, new Tuple<DateTime, DateTime?>(JobHelper.DeserializeDateTime(srv[0]), JobHelper.DeserializeNullableDateTime(srv[1])));
             }
 
@@ -415,9 +426,9 @@ namespace Hangfire.Redis
         /// <param name="value">值</param>
         public override void SetJobParameter([NotNull] string jobId, [NotNull] string name, string value)
         {
-            if(jobId==null)
+            if (jobId == null)
                 throw new ArgumentNullException(nameof(jobId));
-            if(name==null)
+            if (name == null)
                 throw new ArgumentNullException(nameof(name));
             RedisClient.HSet(_storage.GetRedisKey($"job:{jobId}"), name, value);
         }
@@ -429,7 +440,7 @@ namespace Hangfire.Redis
         /// <param name="keyValuePairs">键值对集合</param>
         public override void SetRangeInHash([NotNull] string key, [NotNull] IEnumerable<KeyValuePair<string, string>> keyValuePairs)
         {
-            if(keyValuePairs==null)
+            if (keyValuePairs == null)
                 throw new ArgumentNullException(nameof(keyValuePairs));
             RedisClient.HMSet(_storage.GetRedisKey(key), keyValuePairs.DicToObjectArray());
         }
