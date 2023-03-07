@@ -1,11 +1,11 @@
 <Project>
   <PropertyGroup>
-    <VersionMajor>0</VersionMajor>
+    <VersionMajor>1</VersionMajor>
     <VersionMinor>0</VersionMinor>
-    <VersionPatch>2</VersionPatch>
-    <VersionQuality>20201112-1</VersionQuality>
+    <VersionPatch>0</VersionPatch>
+    <VersionQuality>20230307-1</VersionQuality>
     <VersionPrefix>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionPrefix>
-    <!--<VersionSuffix>preview-$(VersionQuality)</VersionSuffix>-->
+    <VersionSuffix>preview-$(VersionQuality)</VersionSuffix>
   </PropertyGroup>
   <PropertyGroup>
     <Authors>简玄冰</Authors>
