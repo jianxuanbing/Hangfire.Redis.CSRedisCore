@@ -21,6 +21,10 @@ namespace Hangfire.Redis.Sample
                 Prefix = "hangfire.dev:"
             });
             services.AddHangfire(o => { o.UseStorage(storage); });
+            services.AddHangfireServer((sp, o) =>
+            {
+                o.Queues = new[] { "dev", "test", "pred", "prod", "default" };
+            });
             JobStorage.Current = storage;
 
         }
@@ -57,10 +61,10 @@ namespace Hangfire.Redis.Sample
                 DisplayStorageConnectionString = false, // 是否显示数据库连接信息
                 IsReadOnlyFunc = context => false,
             });
-            app.UseHangfireServer(new BackgroundJobServerOptions
-            {
-                Queues = new []{"dev","test","pred","prod","default"}
-            });
+            //app.UseHangfireServer(new BackgroundJobServerOptions
+            //{
+            //    Queues = new []{"dev","test","pred","prod","default"}
+            //});
             RecurringJob.AddOrUpdate(() => Console.WriteLine($"输出内容：{DateTime.Now:yyyy-MM-dd HH:mm:ss.sss}"), "*/1 * * * * ? ", TimeZoneInfo.Local);
             for (var i = 0; i <= 50; i++)
                 BackgroundJob.Schedule(() => Console.WriteLine($"测试延时任务-输出内容：{DateTime.Now:yyyy-MM-dd HH:mm:ss.sss}"), TimeSpan.FromMinutes(1 + i));
