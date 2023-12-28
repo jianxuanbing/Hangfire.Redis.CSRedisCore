@@ -29,7 +29,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="CSRedisCore" Version="3.8.670" />
-		<PackageReference Include="Hangfire.Core" Version="1.7.33" />
+		<PackageReference Include="Hangfire.Core" Version="1.7.9" />
 	</ItemGroup>
 
 	<ItemGroup>
