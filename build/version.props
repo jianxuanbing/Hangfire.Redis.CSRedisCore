@@ -3,9 +3,9 @@
     <VersionMajor>1</VersionMajor>
     <VersionMinor>0</VersionMinor>
     <VersionPatch>0</VersionPatch>
-    <VersionQuality>20230307-1</VersionQuality>
+    <VersionQuality>20230416-1</VersionQuality>
     <VersionPrefix>$(VersionMajor).$(VersionMinor).$(VersionPatch)</VersionPrefix>
-    <VersionSuffix>preview-$(VersionQuality)</VersionSuffix>
+    <!--<VersionSuffix>preview-$(VersionQuality)</VersionSuffix>-->
   </PropertyGroup>
   <PropertyGroup>
     <Authors>简玄冰</Authors>
