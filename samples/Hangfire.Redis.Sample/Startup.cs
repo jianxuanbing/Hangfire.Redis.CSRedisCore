@@ -21,9 +21,9 @@ namespace Hangfire.Redis.Sample
                 Prefix = "hangfire.dev:"
             });
             services.AddHangfire(o => { o.UseStorage(storage); });
-            services.AddHangfireServer((sp, o) =>
+            services.AddHangfireServer((sp) =>
             {
-                o.Queues = new[] { "dev", "test", "pred", "prod", "default" };
+                sp.Queues = new[] { "dev", "test", "pred", "prod", "default" };
             });
             JobStorage.Current = storage;
 
