@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Hangfire.Redis.Tests.States
 {
-    [CleanRedis]
+    [CleanRedis, Collection("Sequential")]
     public class ProcessingStateHandlerFacts
     {
         private const string JobId = "1";
