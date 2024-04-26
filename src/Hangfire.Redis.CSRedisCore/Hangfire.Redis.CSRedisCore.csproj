@@ -2,6 +2,8 @@
 	<Import Project="../../build/version.props"></Import>
 	<PropertyGroup>
 		<TargetFramework>netstandard2.0</TargetFramework>
+		<LangVersion>12</LangVersion>
+		<PackageId>Hangfire.Redis.CSRedisCore</PackageId>
 		<RootNamespace>Hangfire.Redis</RootNamespace>
 		<Description>
 			Hangfire Redis Storage Based on CSRedisCore
@@ -30,6 +32,10 @@
 	<ItemGroup>
 		<PackageReference Include="CSRedisCore" Version="3.8.670" />
 		<PackageReference Include="Hangfire.Core" Version="1.7.9" />
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
 	</ItemGroup>
 
 	<ItemGroup>
