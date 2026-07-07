@@ -30,6 +30,14 @@ namespace Hangfire.Redis.Tests
         }
 
         [Fact, CleanRedis]
+        public void AcquireDistributedLock_ThrowsAnException_WhenResourceIsNull()
+        {
+            UseConnection(connection =>
+                Assert.Throws<ArgumentNullException>("resource",
+                    () => connection.AcquireDistributedLock(null, TimeSpan.FromSeconds(1))));
+        }
+
+        [Fact, CleanRedis]
         public void GetStateData_ThrowsAnException_WhenJobIdIsNull()
         {
             UseConnection(
@@ -95,6 +103,14 @@ namespace Hangfire.Redis.Tests
             UseConnection(connection =>
                 Assert.Throws<ArgumentNullException>("key",
                     () => connection.GetAllItemsFromSet(null)));
+        }
+
+        [Fact, CleanRedis]
+        public void GetAllItemsFromList_ThrowsAnException_WhenKeyIsNull()
+        {
+            UseConnection(connection =>
+                Assert.Throws<ArgumentNullException>("key",
+                    () => connection.GetAllItemsFromList(null)));
         }
 
         [Fact, CleanRedis]
@@ -183,6 +199,14 @@ namespace Hangfire.Redis.Tests
         {
             UseConnection(connection =>
                 Assert.Throws<ArgumentNullException>(() => connection.GetAllEntriesFromHash(null)));
+        }
+
+        [Fact, CleanRedis]
+        public void GetValueFromHash_ThrowsAnException_WhenKeyIsNull()
+        {
+            UseConnection(connection =>
+                Assert.Throws<ArgumentNullException>("key",
+                    () => connection.GetValueFromHash(null, "field")));
         }
 
         [Fact, CleanRedis]

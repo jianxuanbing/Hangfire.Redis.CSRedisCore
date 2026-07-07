@@ -41,6 +41,7 @@ namespace Hangfire.Redis.Tests
             using var storage = CreateStorage();
 
             Assert.True(storage.HasFeature(JobStorageFeatures.ExtendedApi));
+            Assert.True(storage.HasFeature(JobStorageFeatures.Connection.BatchedGetFirstByLowest));
             Assert.True(storage.HasFeature(JobStorageFeatures.Connection.GetUtcDateTime));
             Assert.True(storage.HasFeature(JobStorageFeatures.JobQueueProperty));
             Assert.False(storage.HasFeature(JobStorageFeatures.Transaction.CreateJob));

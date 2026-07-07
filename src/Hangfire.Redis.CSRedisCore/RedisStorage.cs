@@ -21,6 +21,7 @@ public class RedisStorage : JobStorage, IDisposable
     private static readonly HashSet<string> SupportedFeatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         JobStorageFeatures.ExtendedApi,
+        JobStorageFeatures.Connection.BatchedGetFirstByLowest,
         JobStorageFeatures.Connection.GetUtcDateTime,
         JobStorageFeatures.JobQueueProperty
     };

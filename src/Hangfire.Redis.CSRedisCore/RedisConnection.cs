@@ -72,7 +72,7 @@ internal class RedisConnection : JobStorageConnection
     /// </summary>
     /// <param name="resource">资源</param>
     /// <param name="timeout">超时时间</param>
-    public override IDisposable AcquireDistributedLock([NotNull] string resource, TimeSpan timeout) => RedisClient.Lock(_storage.GetRedisKey(resource), (int)timeout.TotalSeconds);
+    public override IDisposable AcquireDistributedLock([NotNull] string resource, TimeSpan timeout) => RedisClient.Lock(GetRequiredRedisKey(resource, nameof(resource)), (int)timeout.TotalSeconds);
 
     /// <summary>
     /// 公布服务器
@@ -187,7 +187,7 @@ internal class RedisConnection : JobStorageConnection
     /// <param name="key">缓存键</param>
     public override Dictionary<string, string> GetAllEntriesFromHash([NotNull] string key)
     {
-        var result = RedisClient.HGetAll(_storage.GetRedisKey(key));
+        var result = RedisClient.HGetAll(GetRequiredRedisKey(key));
         return result.Count != 0 ? result : null;
     }
 
@@ -195,7 +195,7 @@ internal class RedisConnection : JobStorageConnection
     /// 从 List 中获取所有项
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override List<string> GetAllItemsFromList([NotNull] string key) => RedisClient.LRange(_storage.GetRedisKey(key), 0, -1).ToList();
+    public override List<string> GetAllItemsFromList([NotNull] string key) => RedisClient.LRange(GetRequiredRedisKey(key), 0, -1).ToList();
 
     /// <summary>
     /// 从 SortedSet 中获取所有项
@@ -204,7 +204,7 @@ internal class RedisConnection : JobStorageConnection
     public override HashSet<string> GetAllItemsFromSet([NotNull] string key)
     {
         var result = new HashSet<string>();
-        foreach (var item in RedisClient.ZScan(_storage.GetRedisKey(key), 0).Items)
+        foreach (var item in RedisClient.ZScan(GetRequiredRedisKey(key), 0).Items)
             result.Add(item.member);
         return result;
     }
@@ -213,7 +213,7 @@ internal class RedisConnection : JobStorageConnection
     /// 获取计数器
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override long GetCounter([NotNull] string key) => Convert.ToInt64(RedisClient.Get(_storage.GetRedisKey(key)));
+    public override long GetCounter([NotNull] string key) => Convert.ToInt64(RedisClient.Get(GetRequiredRedisKey(key)));
 
     /// <summary>
     /// 获取指定范围内最小值
@@ -222,7 +222,7 @@ internal class RedisConnection : JobStorageConnection
     /// <param name="fromScore">开始范围</param>
     /// <param name="toScore">结束范围</param>
     public override string GetFirstByLowestScoreFromSet([NotNull] string key, double fromScore, double toScore) =>
-        RedisClient.ZRangeByScore(_storage.GetRedisKey(key), (decimal)fromScore, (decimal)toScore, count: 1, offset: 0)
+        RedisClient.ZRangeByScore(GetRequiredRedisKey(key), (decimal)fromScore, (decimal)toScore, count: 1, offset: 0)
             .FirstOrDefault();
 
     /// <summary>
@@ -233,20 +233,20 @@ internal class RedisConnection : JobStorageConnection
     /// <param name="toScore">结束范围</param>
     /// <param name="count">数量</param>
     public override List<string> GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore, int count) =>
-        RedisClient.ZRangeByScore(_storage.GetRedisKey(key), (decimal)fromScore, (decimal)toScore, count: count, offset: 0)
+        RedisClient.ZRangeByScore(GetRequiredRedisKey(key), (decimal)fromScore, (decimal)toScore, count: count, offset: 0)
             .ToList();
 
     /// <summary>
     /// 获取 Hash 计数器
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override long GetHashCount([NotNull] string key) => RedisClient.HLen(_storage.GetRedisKey(key));
+    public override long GetHashCount([NotNull] string key) => RedisClient.HLen(GetRequiredRedisKey(key));
 
     /// <summary>
     /// 获取 Hash 剩余时间
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override TimeSpan GetHashTtl([NotNull] string key) => TimeSpan.FromSeconds(RedisClient.Ttl(_storage.GetRedisKey(key)));
+    public override TimeSpan GetHashTtl([NotNull] string key) => TimeSpan.FromSeconds(RedisClient.Ttl(GetRequiredRedisKey(key)));
 
     /// <summary>
     /// 获取作业数据
@@ -311,13 +311,13 @@ internal class RedisConnection : JobStorageConnection
     /// 获取 List 计数器
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override long GetListCount([NotNull] string key) => RedisClient.LLen(_storage.GetRedisKey(key));
+    public override long GetListCount([NotNull] string key) => RedisClient.LLen(GetRequiredRedisKey(key));
 
     /// <summary>
     /// 获取 List 剩余时间
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override TimeSpan GetListTtl([NotNull] string key) => TimeSpan.FromSeconds(RedisClient.Ttl(_storage.GetRedisKey(key)));
+    public override TimeSpan GetListTtl([NotNull] string key) => TimeSpan.FromSeconds(RedisClient.Ttl(GetRequiredRedisKey(key)));
 
     /// <summary>
     /// 从 List 中获取范围列表
@@ -325,7 +325,7 @@ internal class RedisConnection : JobStorageConnection
     /// <param name="key">缓存键</param>
     /// <param name="startingFrom">开始范围</param>
     /// <param name="endingAt">结束范围</param>
-    public override List<string> GetRangeFromList([NotNull] string key, int startingFrom, int endingAt) => RedisClient.LRange(_storage.GetRedisKey(key), startingFrom, endingAt).ToList();
+    public override List<string> GetRangeFromList([NotNull] string key, int startingFrom, int endingAt) => RedisClient.LRange(GetRequiredRedisKey(key), startingFrom, endingAt).ToList();
 
     /// <summary>
     /// 从 Set 中获取范围列表
@@ -333,19 +333,19 @@ internal class RedisConnection : JobStorageConnection
     /// <param name="key">缓存键</param>
     /// <param name="startingFrom">开始范围</param>
     /// <param name="endingAt">结束范围</param>
-    public override List<string> GetRangeFromSet([NotNull] string key, int startingFrom, int endingAt) => RedisClient.ZRange(_storage.GetRedisKey(key), startingFrom, endingAt).ToList();
+    public override List<string> GetRangeFromSet([NotNull] string key, int startingFrom, int endingAt) => RedisClient.ZRange(GetRequiredRedisKey(key), startingFrom, endingAt).ToList();
 
     /// <summary>
     /// 获取 Set 计数器
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override long GetSetCount([NotNull] string key) => RedisClient.ZCard(_storage.GetRedisKey(key));
+    public override long GetSetCount([NotNull] string key) => RedisClient.ZCard(GetRequiredRedisKey(key));
 
     /// <summary>
     /// 获取 Set 剩余时间
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override TimeSpan GetSetTtl([NotNull] string key) => TimeSpan.FromSeconds(RedisClient.Ttl(_storage.GetRedisKey(key)));
+    public override TimeSpan GetSetTtl([NotNull] string key) => TimeSpan.FromSeconds(RedisClient.Ttl(GetRequiredRedisKey(key)));
 
     /// <summary>
     /// 获取状态数据
@@ -381,7 +381,7 @@ internal class RedisConnection : JobStorageConnection
     {
         if (name == null)
             throw new ArgumentNullException(nameof(name));
-        return RedisClient.HGet(_storage.GetRedisKey(key), name);
+        return RedisClient.HGet(GetRequiredRedisKey(key), name);
     }
 
     /// <summary>
@@ -474,6 +474,22 @@ internal class RedisConnection : JobStorageConnection
     {
         if (keyValuePairs == null)
             throw new ArgumentNullException(nameof(keyValuePairs));
-        RedisClient.HMSet(_storage.GetRedisKey(key), keyValuePairs.DicToObjectArray());
+        RedisClient.HMSet(GetRequiredRedisKey(key), keyValuePairs.DicToObjectArray());
+    }
+
+    private string GetRequiredRedisKey(string key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        return _storage.GetRedisKey(key);
+    }
+
+    private string GetRequiredRedisKey(string key, string paramName)
+    {
+        if (key == null)
+            throw new ArgumentNullException(paramName);
+
+        return _storage.GetRedisKey(key);
     }
 }

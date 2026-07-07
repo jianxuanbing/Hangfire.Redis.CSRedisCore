@@ -35,6 +35,16 @@ namespace Hangfire.Redis.Tests
         //}1
 
         [Fact, CleanRedis]
+        public void ExpireHash_ThrowsAnException_WhenKeyIsNull()
+        {
+            UseConnection(redis =>
+            {
+                Assert.Throws<ArgumentNullException>("key",
+                    () => Commit(redis, x => x.ExpireHash(null, TimeSpan.FromMinutes(1))));
+            });
+        }
+
+        [Fact, CleanRedis]
         public void ExpireJob_SetsExpirationDateForAllRelatedKeys()
         {
             UseConnection(redis =>

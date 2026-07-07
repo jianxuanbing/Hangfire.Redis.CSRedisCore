@@ -39,52 +39,52 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     /// </summary>
     /// <param name="key">键</param>
     /// <param name="items">列表</param>
-    public override void AddRangeToSet([NotNull]string key, [NotNull] IList<string> items) => _redisClientPipe.ZAdd(_storage.GetRedisKey(key), items.Select(x => (0M, (object) x)).ToArray());
+    public override void AddRangeToSet([NotNull]string key, [NotNull] IList<string> items) => _redisClientPipe.ZAdd(GetRequiredRedisKey(key), items.Select(x => (0M, (object) x)).ToArray());
 
     /// <summary>
     /// 设置 Hash 过期时间
     /// </summary>
     /// <param name="key">缓存键</param>
     /// <param name="expireIn">过期时间</param>
-    public override void ExpireHash([NotNull] string key, TimeSpan expireIn) => _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
+    public override void ExpireHash([NotNull] string key, TimeSpan expireIn) => _redisClientPipe.Expire(GetRequiredRedisKey(key), expireIn);
 
     /// <summary>
     /// 设置 List 过期时间
     /// </summary>
     /// <param name="key">缓存键</param>
     /// <param name="expireIn">过期时间</param>
-    public override void ExpireList([NotNull] string key, TimeSpan expireIn) => _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
+    public override void ExpireList([NotNull] string key, TimeSpan expireIn) => _redisClientPipe.Expire(GetRequiredRedisKey(key), expireIn);
 
     /// <summary>
     /// 设置 Set 过期时间
     /// </summary>
     /// <param name="key">缓存键</param>
     /// <param name="expireIn">过期时间</param>
-    public override void ExpireSet([NotNull] string key, TimeSpan expireIn) => _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
+    public override void ExpireSet([NotNull] string key, TimeSpan expireIn) => _redisClientPipe.Expire(GetRequiredRedisKey(key), expireIn);
 
     /// <summary>
     /// 设置 Hash 持久保持
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override void PersistHash([NotNull] string key) => _redisClientPipe.Persist(_storage.GetRedisKey(key));
+    public override void PersistHash([NotNull] string key) => _redisClientPipe.Persist(GetRequiredRedisKey(key));
 
     /// <summary>
     /// 设置 List 持久保持
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override void PersistList([NotNull] string key) => _redisClientPipe.Persist(_storage.GetRedisKey(key));
+    public override void PersistList([NotNull] string key) => _redisClientPipe.Persist(GetRequiredRedisKey(key));
 
     /// <summary>
     /// 设置 Set 持久保持
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override void PersistSet([NotNull] string key) => _redisClientPipe.Persist(_storage.GetRedisKey(key));
+    public override void PersistSet([NotNull] string key) => _redisClientPipe.Persist(GetRequiredRedisKey(key));
 
     /// <summary>
     /// 移除 Set
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override void RemoveSet([NotNull] string key) => _redisClientPipe.Del(_storage.GetRedisKey(key));
+    public override void RemoveSet([NotNull] string key) => _redisClientPipe.Del(GetRequiredRedisKey(key));
 
     /// <summary>
     /// 提交
@@ -187,7 +187,7 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     /// 递增计数器
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override void IncrementCounter([NotNull] string key) => _redisClientPipe.IncrBy(_storage.GetRedisKey(key));
+    public override void IncrementCounter([NotNull] string key) => _redisClientPipe.IncrBy(GetRequiredRedisKey(key));
 
     /// <summary>
     /// 递增计数器
@@ -196,15 +196,16 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     /// <param name="expireIn">过期时间</param>
     public override void IncrementCounter([NotNull] string key, TimeSpan expireIn)
     {
-        _redisClientPipe.IncrBy(_storage.GetRedisKey(key));
-        _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
+        var redisKey = GetRequiredRedisKey(key);
+        _redisClientPipe.IncrBy(redisKey);
+        _redisClientPipe.Expire(redisKey, expireIn);
     }
 
     /// <summary>
     /// 递减计数器
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override void DecrementCounter([NotNull] string key) => _redisClientPipe.IncrBy(_storage.GetRedisKey(key), -1);
+    public override void DecrementCounter([NotNull] string key) => _redisClientPipe.IncrBy(GetRequiredRedisKey(key), -1);
 
     /// <summary>
     /// 递减计数器
@@ -213,8 +214,9 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     /// <param name="expireIn">过期时间</param>
     public override void DecrementCounter([NotNull] string key, TimeSpan expireIn)
     {
-        _redisClientPipe.IncrBy(_storage.GetRedisKey(key),-1);
-        _redisClientPipe.Expire(_storage.GetRedisKey(key), expireIn);
+        var redisKey = GetRequiredRedisKey(key);
+        _redisClientPipe.IncrBy(redisKey,-1);
+        _redisClientPipe.Expire(redisKey, expireIn);
     }
 
     /// <summary>
@@ -234,7 +236,7 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     {
         if (value == null)
             throw new ArgumentNullException(nameof(value));
-        _redisClientPipe.ZAdd(_storage.GetRedisKey(key), ((decimal) score, value));
+        _redisClientPipe.ZAdd(GetRequiredRedisKey(key), ((decimal) score, value));
     }
 
     /// <summary>
@@ -246,7 +248,7 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     {
         if (value == null)
             throw new ArgumentNullException(nameof(value));
-        _redisClientPipe.ZRem(_storage.GetRedisKey(key), value);
+        _redisClientPipe.ZRem(GetRequiredRedisKey(key), value);
     }
 
     /// <summary>
@@ -254,14 +256,14 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     /// </summary>
     /// <param name="key">缓存键</param>
     /// <param name="value">值</param>
-    public override void InsertToList([NotNull] string key, string value) => _redisClientPipe.LPush(_storage.GetRedisKey(key), value);
+    public override void InsertToList([NotNull] string key, string value) => _redisClientPipe.LPush(GetRequiredRedisKey(key), value);
 
     /// <summary>
     /// 从 List 中移除
     /// </summary>
     /// <param name="key">缓存键</param>
     /// <param name="value">值</param>
-    public override void RemoveFromList([NotNull] string key, string value) => _redisClientPipe.LRem(_storage.GetRedisKey(key), 0, value);
+    public override void RemoveFromList([NotNull] string key, string value) => _redisClientPipe.LRem(GetRequiredRedisKey(key), 0, value);
 
     /// <summary>
     /// 清空列表
@@ -269,7 +271,7 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     /// <param name="key">缓存键</param>
     /// <param name="keepStartingFrom">开始范围</param>
     /// <param name="keepEndingAt">结束范围</param>
-    public override void TrimList([NotNull] string key, int keepStartingFrom, int keepEndingAt) => _redisClientPipe.LTrim(_storage.GetRedisKey(key), keepStartingFrom, keepEndingAt);
+    public override void TrimList([NotNull] string key, int keepStartingFrom, int keepEndingAt) => _redisClientPipe.LTrim(GetRequiredRedisKey(key), keepStartingFrom, keepEndingAt);
 
     /// <summary>
     /// 设置范围列表到 Hash 
@@ -280,17 +282,25 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     {
         if (keyValuePairs == null)
             throw new ArgumentNullException(nameof(keyValuePairs));
-        _redisClientPipe.HMSet(_storage.GetRedisKey(key), keyValuePairs.DicToObjectArray());
+        _redisClientPipe.HMSet(GetRequiredRedisKey(key), keyValuePairs.DicToObjectArray());
     }
 
     /// <summary>
     /// 移除 Hash
     /// </summary>
     /// <param name="key">缓存键</param>
-    public override void RemoveHash([NotNull] string key) => _redisClientPipe.Del(_storage.GetRedisKey(key));
+    public override void RemoveHash([NotNull] string key) => _redisClientPipe.Del(GetRequiredRedisKey(key));
 
     /// <summary>
     /// 释放资源
     /// </summary>
     public override void Dispose() => _redisClientPipe.Dispose();
+
+    private string GetRequiredRedisKey(string key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        return _storage.GetRedisKey(key);
+    }
 }
