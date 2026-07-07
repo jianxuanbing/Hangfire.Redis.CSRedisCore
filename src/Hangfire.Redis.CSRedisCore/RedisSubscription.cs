@@ -9,6 +9,7 @@ namespace Hangfire.Redis;
 /// <summary>
 /// Redis订阅
 /// </summary>
+#pragma warning disable CS0618
 internal class RedisSubscription : IServerComponent, IDisposable
 {
     /// <summary>
@@ -107,3 +108,4 @@ internal class RedisSubscription : IServerComponent, IDisposable
         }
     }
 }
+#pragma warning restore CS0618

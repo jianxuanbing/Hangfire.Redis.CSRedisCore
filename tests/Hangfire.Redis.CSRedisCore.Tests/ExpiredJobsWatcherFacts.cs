@@ -90,6 +90,6 @@ namespace Hangfire.Redis.Tests
             Assert.Equal(1, redis.LLen("{hangfire}:deleted"));
         }
 
-        private IServerComponent CreateWatcher() => new ExpiredJobsWatcher(_storage, CheckInterval);
+        private ExpiredJobsWatcher CreateWatcher() => new ExpiredJobsWatcher(_storage, CheckInterval);
     }
 }

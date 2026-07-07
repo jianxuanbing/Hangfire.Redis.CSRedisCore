@@ -41,6 +41,11 @@ public class RedisStorage : JobStorage, IDisposable
     private readonly Lazy<RedisSubscription> _subscription;
 
     /// <summary>
+    /// 订阅通道名称
+    /// </summary>
+    private readonly string _subscriptionChannel;
+
+    /// <summary>
     /// 是否已释放
     /// </summary>
     private bool _disposed;
@@ -68,6 +73,7 @@ public class RedisStorage : JobStorage, IDisposable
         _options = options ?? new RedisStorageOptions();
         _ownsRedisClient = true;
         RedisClient = new CSRedisClient(connectionString);
+        _subscriptionChannel = _options.Prefix + "JobFetchChannel";
         _subscription = CreateSubscriptionFactory();
     }
 
@@ -78,9 +84,10 @@ public class RedisStorage : JobStorage, IDisposable
     /// <param name="options">Redis存储选项配置</param>
     public RedisStorage(CSRedisClient redisClient, RedisStorageOptions options = null)
     {
-        RedisClient = redisClient;
+        RedisClient = redisClient ?? throw new ArgumentNullException(nameof(redisClient));
         _options = options ?? new RedisStorageOptions();
         _ownsRedisClient = false;
+        _subscriptionChannel = _options.Prefix + "JobFetchChannel";
         _subscription = CreateSubscriptionFactory();
     }
 
@@ -97,7 +104,7 @@ public class RedisStorage : JobStorage, IDisposable
     /// <summary>
     /// 订阅管道
     /// </summary>
-    internal string SubscriptionChannel => _subscription.Value.Channel;
+    internal string SubscriptionChannel => _subscriptionChannel;
 
     /// <summary>
     /// LIFO(后进先出)队列
@@ -107,7 +114,11 @@ public class RedisStorage : JobStorage, IDisposable
     /// <summary>
     /// 获取监控API
     /// </summary>
-    public override IMonitoringApi GetMonitoringApi() => new RedisMonitoringApi(this, RedisClient);
+    public override IMonitoringApi GetMonitoringApi()
+    {
+        EnsureNotDisposed();
+        return new RedisMonitoringApi(this, RedisClient);
+    }
 
     /// <summary>
     /// 获取存储特性
@@ -123,17 +134,23 @@ public class RedisStorage : JobStorage, IDisposable
     /// <summary>
     /// 获取存储连接
     /// </summary>
-    public override IStorageConnection GetConnection() => new RedisConnection(this, RedisClient, _subscription.Value, _options.FetchTimeout);
+    public override IStorageConnection GetConnection()
+    {
+        EnsureNotDisposed();
+        return new RedisConnection(this, RedisClient, _subscription.Value, _options.FetchTimeout);
+    }
 
     /// <summary>
     /// 获取组件集合
     /// </summary>
+#pragma warning disable CS0618, CS0672
     public override IEnumerable<IServerComponent> GetComponents()
     {
         yield return new FetchedJobsWatcher(this, _options.InvisibilityTimeout);
         yield return new ExpiredJobsWatcher(this, _options.ExpiryCheckInterval);
         yield return _subscription.Value;
     }
+#pragma warning restore CS0618, CS0672
 
     /// <summary>
     /// 获取状态处理器集合
@@ -160,6 +177,9 @@ public class RedisStorage : JobStorage, IDisposable
     /// </summary>
     public override string ToString() => RedisClient.ToString();
 
+    /// <summary>
+    /// 释放当前存储实例持有的订阅与 Redis 客户端资源。
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)
@@ -173,6 +193,12 @@ public class RedisStorage : JobStorage, IDisposable
 
         _disposed = true;
         GC.SuppressFinalize(this);
+    }
+
+    private void EnsureNotDisposed()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(RedisStorage));
     }
 
     private Lazy<RedisSubscription> CreateSubscriptionFactory() =>

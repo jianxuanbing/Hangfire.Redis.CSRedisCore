@@ -20,7 +20,6 @@ public class RedisStorageOptions
         InvisibilityTimeout = TimeSpan.FromMinutes(30);
         FetchTimeout = TimeSpan.FromMinutes(3);
         ExpiryCheckInterval = TimeSpan.FromHours(1);
-        Db = 0;
         Prefix = DefaultPrefix;
         SucceededListSize = 499;
         DeletedListSize = 499;
@@ -48,8 +47,9 @@ public class RedisStorageOptions
     public string Prefix { get; set; }
 
     /// <summary>
-    /// 数据库
+    /// 数据库。当前不参与 <see cref="CSRedis.CSRedisClient"/> 的数据库选择，请改为在连接串中配置 <c>defaultDatabase</c>。
     /// </summary>
+    [Obsolete("RedisStorageOptions.Db is ignored. Configure database selection on CSRedisClient or the connection string, for example with defaultDatabase=1.")]
     public int Db { get; set; }
 
     /// <summary>

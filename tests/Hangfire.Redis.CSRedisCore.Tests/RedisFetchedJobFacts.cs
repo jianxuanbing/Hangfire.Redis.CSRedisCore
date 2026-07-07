@@ -105,6 +105,23 @@ namespace Hangfire.Redis.Tests
         }
 
         [Fact, CleanRedis]
+        public void RemoveFromQueue_CalledTwice_IsIdempotent()
+        {
+            UseRedis(redis =>
+            {
+                redis.RPush("{hangfire}:queue:my-queue:dequeued", "job-id");
+                redis.RPush("{hangfire}:queue:my-queue:dequeued", "job-id");
+
+                var fetchedJob = new RedisFetchedJob(_storage, redis, "job-id", "my-queue");
+
+                fetchedJob.RemoveFromQueue();
+                fetchedJob.RemoveFromQueue();
+
+                Assert.Equal(1, redis.LLen("{hangfire}:queue:my-queue:dequeued"));
+            });
+        }
+
+        [Fact, CleanRedis]
         public void RemoveFromQueue_RemovesTheFetchedFlag()
         {
             UseRedis(redis =>
@@ -222,6 +239,23 @@ namespace Hangfire.Redis.Tests
 
                 // Assert
                 Assert.False(redis.HExists("{hangfire}:job:my-job", "Checked"));
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void Requeue_CalledTwice_IsIdempotent()
+        {
+            UseRedis(redis =>
+            {
+                redis.RPush("{hangfire}:queue:my-queue:dequeued", "my-job");
+
+                var fetchedJob = new RedisFetchedJob(_storage, redis, "my-job", "my-queue");
+
+                fetchedJob.Requeue();
+                fetchedJob.Requeue();
+
+                Assert.Equal(1, redis.LLen("{hangfire}:queue:my-queue"));
+                Assert.Equal("my-job", (string)redis.RPop("{hangfire}:queue:my-queue"));
             });
         }
 

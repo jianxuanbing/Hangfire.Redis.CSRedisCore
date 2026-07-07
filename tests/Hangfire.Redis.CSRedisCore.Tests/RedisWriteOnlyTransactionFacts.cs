@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Hangfire.Common;
 using Hangfire.States;
 using Moq;
@@ -193,6 +194,21 @@ namespace Hangfire.Redis.Tests
                 Commit(redis, x => x.AddToQueue("critical", "my-job"));
 
                 Assert.Equal("my-job", (string)redis.LIndex("{hangfire}:queue:critical", 0));
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void AddToQueue_DoesNotForceSubscriptionCreation()
+        {
+            UseConnection(redis =>
+            {
+                var subscription = GetSubscriptionFactory(_storage);
+                Assert.False(subscription.IsValueCreated);
+
+                Commit(redis, x => x.AddToQueue("critical", "my-job"));
+
+                Assert.False(subscription.IsValueCreated);
+                Assert.Equal("{hangfire}:JobFetchChannel", _storage.SubscriptionChannel);
             });
         }
 
@@ -410,6 +426,12 @@ namespace Hangfire.Redis.Tests
         {
             var redis = RedisUtils.RedisClient;
             action(redis);
+        }
+
+        private static Lazy<RedisSubscription> GetSubscriptionFactory(RedisStorage storage)
+        {
+            var field = typeof(RedisStorage).GetField("_subscription", BindingFlags.Instance | BindingFlags.NonPublic);
+            return (Lazy<RedisSubscription>)field.GetValue(storage);
         }
     }
 }

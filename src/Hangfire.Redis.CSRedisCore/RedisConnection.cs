@@ -62,9 +62,9 @@ internal class RedisConnection : JobStorageConnection
         , TimeSpan fetchTimeout)
     {
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        RedisClient = redisClient ?? throw new ArgumentNullException(nameof(redisClient));
         _subscription = subscription ?? throw new ArgumentNullException(nameof(subscription));
         _fetchTimeout = fetchTimeout;
-        RedisClient = redisClient;
     }
 
     /// <summary>

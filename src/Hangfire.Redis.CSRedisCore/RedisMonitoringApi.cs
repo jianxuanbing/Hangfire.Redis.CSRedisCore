@@ -659,6 +659,7 @@ public class RedisMonitoringApi : IMonitoringApi
     /// <param name="method">方法</param>
     /// <param name="parameterTypes">参数类型</param>
     /// <param name="arguments">参数</param>
+    /// <param name="queue">队列</param>
     private static Job TryToGetJob(string type, string method, string parameterTypes, string arguments, string queue)
     {
         try

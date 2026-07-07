@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System;
+using System.Net;
 using System.Threading.Tasks;
 using Hangfire;
 using Hangfire.Dashboard;
@@ -14,6 +15,12 @@ namespace Hangfire.Redis.Tests
 {
     public class RedisStorageFacts
     {
+        [Fact]
+        public void Ctor_ThrowsAnException_WhenRedisClientIsNull()
+        {
+            Assert.Throws<ArgumentNullException>("redisClient", () => new RedisStorage((CSRedis.CSRedisClient)null));
+        }
+
         [Fact, CleanRedis]
         public void GetStateHandlers_ReturnsAllHandlers()
         {
@@ -67,6 +74,24 @@ namespace Hangfire.Redis.Tests
                 var response = await server.CreateClient().GetAsync("/hangfire/");
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             }
+        }
+
+        [Fact]
+        public void Dispose_ThenGetConnection_ThrowsObjectDisposedException()
+        {
+            var storage = CreateStorage();
+            storage.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => storage.GetConnection());
+        }
+
+        [Fact]
+        public void Dispose_ThenGetMonitoringApi_ThrowsObjectDisposedException()
+        {
+            var storage = CreateStorage();
+            storage.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => storage.GetMonitoringApi());
         }
 
         private RedisStorage CreateStorage()

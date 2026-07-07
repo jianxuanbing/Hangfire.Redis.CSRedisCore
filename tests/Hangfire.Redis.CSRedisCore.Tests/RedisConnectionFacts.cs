@@ -19,6 +19,16 @@ namespace Hangfire.Redis.Tests
 
         public void Dispose() => _storage.Dispose();
 
+        [Fact]
+        public void Ctor_ThrowsAnException_WhenRedisClientIsNull()
+        {
+            using var storage = new RedisStorage(RedisUtils.RedisClient, new RedisStorageOptions());
+            using var subscription = new RedisSubscription(storage, RedisUtils.RedisClient);
+
+            Assert.Throws<ArgumentNullException>("redisClient", () =>
+                new RedisConnection(storage, (CSRedis.CSRedisClient)null, subscription, TimeSpan.FromSeconds(1)));
+        }
+
         [Fact, CleanRedis]
         public void GetStateData_ThrowsAnException_WhenJobIdIsNull()
         {
@@ -329,6 +339,49 @@ namespace Hangfire.Redis.Tests
                     fetchedJob.RemoveFromQueue();
                 }
             });
+        }
+
+        [Fact, CleanRedis]
+        public void FetchNextJob_ConsumesMostRecentlyAddedJob_FromConfiguredLifoQueue()
+        {
+            var options = new RedisStorageOptions
+            {
+                LifoQueues = new[] { "critical" }
+            };
+
+            using var storage = new RedisStorage(RedisUtils.RedisClient, options);
+            using var connection = (RedisConnection)storage.GetConnection();
+
+            var firstJobId = connection.CreateExpiredJob(
+                Job.FromExpression(() => SampleMethods.NoArgs(), "critical"),
+                new Dictionary<string, string>(),
+                DateTime.UtcNow,
+                TimeSpan.FromHours(1));
+
+            var secondJobId = connection.CreateExpiredJob(
+                Job.FromExpression(() => SampleMethods.NoArgs(), "critical"),
+                new Dictionary<string, string>(),
+                DateTime.UtcNow,
+                TimeSpan.FromHours(1));
+
+            using (var transaction = new RedisWriteOnlyTransaction(storage))
+            {
+                transaction.AddToQueue("critical", firstJobId);
+                transaction.AddToQueue("critical", secondJobId);
+                transaction.Commit();
+            }
+
+            using (var firstFetchedJob = connection.FetchNextJob(new[] { "critical" }, CancellationToken.None))
+            {
+                Assert.Equal(secondJobId, firstFetchedJob.JobId);
+                firstFetchedJob.RemoveFromQueue();
+            }
+
+            using (var secondFetchedJob = connection.FetchNextJob(new[] { "critical" }, CancellationToken.None))
+            {
+                Assert.Equal(firstJobId, secondFetchedJob.JobId);
+                secondFetchedJob.RemoveFromQueue();
+            }
         }
 
         public static class SampleMethods

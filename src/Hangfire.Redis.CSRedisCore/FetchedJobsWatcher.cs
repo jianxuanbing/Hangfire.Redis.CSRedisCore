@@ -9,6 +9,7 @@ namespace Hangfire.Redis;
 /// <summary>
 /// 拉取作业观察者
 /// </summary>
+#pragma warning disable CS0618
 internal class FetchedJobsWatcher : IServerComponent
 {
     /// <summary>
@@ -162,3 +163,4 @@ internal class FetchedJobsWatcher : IServerComponent
                DateTime.UtcNow - JobHelper.DeserializeDateTime(checkedTimestamp) > _options.CheckedTimeout;
     }
 }
+#pragma warning restore CS0618

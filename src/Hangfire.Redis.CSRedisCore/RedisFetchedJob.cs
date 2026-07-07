@@ -80,6 +80,9 @@ internal class RedisFetchedJob : IFetchedJob
     /// </summary>
     public void RemoveFromQueue()
     {
+        if (_removedFromQueue || _requeued)
+            return;
+
         RemoveFromFetchedList();
         _removedFromQueue = true;
     }
@@ -100,6 +103,9 @@ internal class RedisFetchedJob : IFetchedJob
     /// </summary>
     public void Requeue()
     {
+        if (_requeued || _removedFromQueue)
+            return;
+
         _redisClient.RPush(_storage.GetRedisKey($"queue:{Queue}"), JobId);
         RemoveFromFetchedList();
         _requeued = true;

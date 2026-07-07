@@ -11,6 +11,7 @@ namespace Hangfire.Redis;
 /// <summary>
 /// 已过期作业观察者
 /// </summary>
+#pragma warning disable CS0618
 internal class ExpiredJobsWatcher : IServerComponent
 {
     /// <summary>
@@ -114,3 +115,4 @@ internal class ExpiredJobsWatcher : IServerComponent
         }
     }
 }
+#pragma warning restore CS0618
