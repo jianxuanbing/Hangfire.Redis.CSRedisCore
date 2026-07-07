@@ -25,7 +25,11 @@ namespace Hangfire.Redis.Sample
 
         public void ConfigureServices(IServiceCollection services)
         {
-            var storage = new RedisStorage(_configuration["Redis:ConnectionString"], new RedisStorageOptions
+            var connectionString = _configuration["Redis:ConnectionString"];
+            if (string.IsNullOrWhiteSpace(connectionString))
+                connectionString = "127.0.0.1:6379,defaultDatabase=1,poolsize=50";
+
+            var storage = new RedisStorage(connectionString, new RedisStorageOptions
             {
                 Prefix = _configuration["Redis:Prefix"] ?? RedisStorageOptions.DefaultPrefix
             });

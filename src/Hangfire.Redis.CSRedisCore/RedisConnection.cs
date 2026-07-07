@@ -16,6 +16,24 @@ namespace Hangfire.Redis;
 /// </summary>
 internal class RedisConnection : JobStorageConnection
 {
+    private const string FetchNextJobScript = @"
+local queueKey = KEYS[1]
+local dequeuedKey = queueKey .. ':dequeued'
+local jobId = redis.call('RPOPLPUSH', queueKey, dequeuedKey)
+
+if not jobId then
+    return nil
+end
+
+local queueMarker = string.find(queueKey, 'queue:', 1, true)
+if not queueMarker then
+    return redis.error_reply('Unexpected queue key: ' .. queueKey)
+end
+
+local prefix = string.sub(queueKey, 1, queueMarker - 1)
+redis.call('HSET', prefix .. 'job:' .. jobId, 'Fetched', ARGV[1])
+return jobId";
+
     private static readonly HashSet<string> ReservedJobFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "Arguments",
@@ -153,8 +171,11 @@ internal class RedisConnection : JobStorageConnection
             {
                 queueName = queue;
                 var queueKey = _storage.GetRedisKey($"queue:{queueName}");
-                var fetchedKey = _storage.GetRedisKey($"queue:{queueName}:dequeued");
-                jobId = RedisClient.RPopLPush(queueKey, fetchedKey);
+                jobId = RedisClient.Eval(
+                    FetchNextJobScript,
+                    queueKey,
+                    JobHelper.SerializeDateTime(DateTime.UtcNow))?.ToString();
+
                 if (jobId != null)
                     break;
             }
@@ -162,8 +183,6 @@ internal class RedisConnection : JobStorageConnection
             if (jobId == null)
                 _subscription.WaitForJob(_fetchTimeout, cancellationToken);
         } while (jobId == null);
-
-        RedisClient.HSet(_storage.GetRedisKey($"job:{jobId}"), "Fetched", JobHelper.SerializeDateTime(DateTime.UtcNow));
 
         return new RedisFetchedJob(_storage, RedisClient, jobId, queueName);
     }

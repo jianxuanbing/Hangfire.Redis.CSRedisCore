@@ -77,7 +77,7 @@ public class RedisMonitoringApi : IMonitoringApi
                         Job = job,
                         State = jobData[0],
                         EnqueuedAt = JobHelper.DeserializeNullableDateTime(state[0]),
-                        InEnqueuedState = jobData[0].Equals(state[1], StringComparison.OrdinalIgnoreCase)
+                        InEnqueuedState = string.Equals(jobData[0], state[1], StringComparison.OrdinalIgnoreCase)
                     });
 
                 result.Add(new QueueWithTopEnqueuedJobsDto
@@ -262,7 +262,7 @@ public class RedisMonitoringApi : IMonitoringApi
                     Job = job,
                     State = jobData[0],
                     EnqueuedAt = JobHelper.DeserializeNullableDateTime(state[0]),
-                    InEnqueuedState = jobData[0].Equals(state[1], StringComparison.OrdinalIgnoreCase)
+                    InEnqueuedState = string.Equals(jobData[0], state[1], StringComparison.OrdinalIgnoreCase)
                 });
         });
     }

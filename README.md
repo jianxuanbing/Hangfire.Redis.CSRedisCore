@@ -60,11 +60,13 @@ GlobalConfiguration.Configuration
 - `Monitoring.DeletedStateGraphs`
 - `Monitoring.AwaitingJobs`
 
-说明：本 provider 的 write transaction 基于 `CSRedisCore` 的 pipelined write 路径，不提供可回滚的 Redis 事务语义，因此只开启了已经有真实实现和测试覆盖的 Hangfire 1.8 feature。
+说明：本 provider 的 write transaction 仍然不是可回滚的 Redis 事务语义，但 `Transaction.CreateJob`、`FetchNextJob`、fetched-job remove/requeue 等多步一致性路径已改为 Lua 原子执行，因此只开启了已经有真实实现和测试覆盖的 Hangfire 1.8 feature。
+
+补充：Lua 脚本只把真实 Redis data key 放在 `KEYS` 上下文中处理；`PUBLISH` 使用的 channel 不是 data key，仍作为普通参数传入。
 
 ## Sample
 
-sample 项目位于 [samples/Hangfire.Redis.Sample/Program.cs](/e:/Bing_Framework/Hangfire.Redis.CSRedisCore/samples/Hangfire.Redis.Sample/Program.cs:1) 和 [samples/Hangfire.Redis.Sample/Startup.cs](/e:/Bing_Framework/Hangfire.Redis.CSRedisCore/samples/Hangfire.Redis.Sample/Startup.cs:1)，默认展示：
+sample 项目位于 [samples/Hangfire.Redis.Sample/Program.cs](samples/Hangfire.Redis.Sample/Program.cs) 和 [samples/Hangfire.Redis.Sample/Startup.cs](samples/Hangfire.Redis.Sample/Startup.cs)，默认展示：
 
 - `CompatibilityLevel.Version_180`
 - `critical` / `default` 两个队列

@@ -14,6 +14,11 @@ namespace Hangfire.Redis;
 /// </summary>
 internal class RedisWriteOnlyTransaction : JobStorageTransaction
 {
+    private const string CreateJobScript = @"
+redis.call('HMSET', KEYS[1], unpack(ARGV, 2))
+redis.call('PEXPIRE', KEYS[1], ARGV[1])
+return 1";
+
     /// <summary>
     /// Redis存储
     /// </summary>
@@ -235,9 +240,13 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
         var jobId = Guid.NewGuid().ToString("n");
         var storedParameters = RedisConnection.CreateJobHash(job, parameters, createdAt);
         var jobKey = _storage.GetRedisKey($"job:{jobId}");
+        var hashEntries = storedParameters.DicToObjectArray();
+        var scriptArguments = new object[hashEntries.Length + 1];
 
-        _redisClientPipe.HMSet(jobKey, storedParameters.DicToObjectArray());
-        _redisClientPipe.Expire(jobKey, expireIn);
+        scriptArguments[0] = Math.Max(1L, (long)Math.Ceiling(expireIn.TotalMilliseconds));
+        Array.Copy(hashEntries, 0, scriptArguments, 1, hashEntries.Length);
+
+        _redisClientPipe.Eval(CreateJobScript, jobKey, scriptArguments);
         return jobId;
     }
 

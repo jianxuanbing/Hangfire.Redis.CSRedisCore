@@ -393,6 +393,33 @@ namespace Hangfire.Redis.Tests
         }
 
         [Fact, CleanRedis]
+        public void FetchNextJob_MovesJobToDequeuedList()
+        {
+            UseConnections((redis, connection) =>
+            {
+                var jobId = connection.CreateExpiredJob(
+                    Job.FromExpression(() => SampleMethods.NoArgs()),
+                    new Dictionary<string, string>(),
+                    DateTime.UtcNow,
+                    TimeSpan.FromHours(1));
+
+                using (var transaction = new RedisWriteOnlyTransaction(_storage))
+                {
+                    transaction.AddToQueue("default", jobId);
+                    transaction.Commit();
+                }
+
+                using (var fetchedJob = connection.FetchNextJob(new[] { "default" }, CancellationToken.None))
+                {
+                    Assert.Equal(0, redis.LLen("{hangfire}:queue:default"));
+                    Assert.Equal(jobId, redis.LIndex("{hangfire}:queue:default:dequeued", 0));
+
+                    fetchedJob.RemoveFromQueue();
+                }
+            });
+        }
+
+        [Fact, CleanRedis]
         public void FetchNextJob_ConsumesMostRecentlyAddedJob_FromConfiguredLifoQueue()
         {
             var options = new RedisStorageOptions

@@ -11,15 +11,30 @@ namespace Hangfire.Redis;
 internal class RedisFetchedJob : IFetchedJob
 {
     private const string RemoveFromFetchedListScript = @"
+local dequeuedKey = KEYS[1]
+local queueMarker = string.find(dequeuedKey, 'queue:', 1, true)
+if not queueMarker then
+    return redis.error_reply('Unexpected fetched queue key: ' .. dequeuedKey)
+end
+
+local prefix = string.sub(dequeuedKey, 1, queueMarker - 1)
 redis.call('LREM', KEYS[1], -1, ARGV[1])
-redis.call('HDEL', ARGV[2], 'Fetched', 'Checked')
+redis.call('HDEL', prefix .. 'job:' .. ARGV[1], 'Fetched', 'Checked')
 return 1";
 
     private const string RequeueScript = @"
+local queueKey = KEYS[1]
+local queueMarker = string.find(queueKey, 'queue:', 1, true)
+if not queueMarker then
+    return redis.error_reply('Unexpected queue key: ' .. queueKey)
+end
+
+local prefix = string.sub(queueKey, 1, queueMarker - 1)
+local dequeuedKey = queueKey .. ':dequeued'
 redis.call('RPUSH', KEYS[1], ARGV[1])
 redis.call('PUBLISH', ARGV[2], ARGV[1])
-redis.call('LREM', ARGV[3], -1, ARGV[1])
-redis.call('HDEL', ARGV[4], 'Fetched', 'Checked')
+redis.call('LREM', dequeuedKey, -1, ARGV[1])
+redis.call('HDEL', prefix .. 'job:' .. ARGV[1], 'Fetched', 'Checked')
 return 1";
 
     /// <summary>
@@ -126,8 +141,7 @@ return 1";
         redisClientPipe.Eval(
             RemoveFromFetchedListScript,
             storage.GetRedisKey($"queue:{queue}:dequeued"),
-            jobId,
-            storage.GetRedisKey($"job:{jobId}"));
+            jobId);
     }
 
     internal static void ExecuteRemoveFromFetchedList(CSRedisClient redisClient, RedisStorage storage, string queue, string jobId)
@@ -138,8 +152,7 @@ return 1";
         redisClient.Eval(
             RemoveFromFetchedListScript,
             storage.GetRedisKey($"queue:{queue}:dequeued"),
-            jobId,
-            storage.GetRedisKey($"job:{jobId}"));
+            jobId);
     }
 
     internal static void ExecuteRequeue(CSRedisClient redisClient, RedisStorage storage, string queue, string jobId)
@@ -151,8 +164,6 @@ return 1";
             RequeueScript,
             storage.GetRedisKey($"queue:{queue}"),
             jobId,
-            storage.SubscriptionChannel,
-            storage.GetRedisKey($"queue:{queue}:dequeued"),
-            storage.GetRedisKey($"job:{jobId}"));
+            storage.SubscriptionChannel);
     }
 }

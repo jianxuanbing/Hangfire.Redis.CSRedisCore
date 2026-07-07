@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
@@ -7,11 +9,13 @@ using Hangfire.Common;
 using Hangfire.Dashboard;
 using System.Linq;
 using Hangfire.Redis.States;
+using Hangfire.Server;
 using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Builder;
 using Xunit;
 using Xunit.Sdk;
 
@@ -116,24 +120,147 @@ namespace Hangfire.Redis.Tests
         public async Task Dashboard_HomePage_ReturnsSuccess()
         {
             using var storage = CreateStorage();
+            SeedDashboardData(storage);
 
-            using (var server = new TestServer(new WebHostBuilder()
-                .ConfigureServices(services =>
-                {
-                    JobStorage.Current = storage;
-                    services.AddHangfire(configuration => configuration.UseStorage(storage));
-                })
-                .Configure(app =>
-                {
-                    app.UseHangfireDashboard("/hangfire", new DashboardOptions
-                    {
-                        Authorization = new[] { new AllowAllDashboardAuthorizationFilter() },
-                        IgnoreAntiforgeryToken = true
-                    });
-                })))
+            await AssertDashboardRoutesReturnSuccess(storage, "/hangfire/");
+        }
+
+        [Fact, CleanRedis]
+        public async Task Dashboard_CommonPages_ReturnSuccess()
+        {
+            using var storage = CreateStorage();
+            SeedDashboardData(storage);
+
+            await AssertDashboardRoutesReturnSuccess(
+                storage,
+                "/hangfire/",
+                "/hangfire/servers",
+                "/hangfire/jobs/enqueued",
+                "/hangfire/jobs/enqueued/default",
+                "/hangfire/jobs/processing",
+                "/hangfire/jobs/succeeded",
+                "/hangfire/jobs/failed",
+                "/hangfire/recurring");
+        }
+
+        [Fact, CleanRedis]
+        public async Task Dashboard_JobDetails_ReturnsSuccess()
+        {
+            using var storage = CreateStorage();
+            var jobId = CreateDashboardJob(storage);
+
+            await AssertDashboardRoutesReturnSuccess(storage, $"/hangfire/jobs/details/{jobId}");
+        }
+
+        [Fact, CleanRedis]
+        public async Task Dashboard_Stats_ReturnsSuccess()
+        {
+            using var storage = CreateStorage();
+            SeedDashboardData(storage);
+
+            await AssertDashboardStatsRouteReturnsSuccess(storage);
+        }
+
+        private static void SeedDashboardData(RedisStorage storage)
+        {
+            using var connection = storage.GetConnection();
+            connection.AnnounceServer("server-1", new ServerContext
             {
-                var response = await server.CreateClient().GetAsync("/hangfire/");
+                Queues = new[] { "default" },
+                WorkerCount = 1
+            });
+
+            CreateDashboardJob(storage);
+        }
+
+        private static string CreateDashboardJob(RedisStorage storage)
+        {
+            using var connection = storage.GetConnection();
+
+            var jobId = connection.CreateExpiredJob(
+                Job.FromExpression(() => RedisUtils.RecordExecution("dashboard")),
+                new System.Collections.Generic.Dictionary<string, string>(),
+                DateTime.UtcNow,
+                TimeSpan.FromHours(1));
+
+            using (var transaction = connection.CreateWriteTransaction())
+            {
+                transaction.AddToQueue("default", jobId);
+                transaction.Commit();
+            }
+
+            return jobId;
+        }
+
+        private static async Task AssertDashboardRoutesReturnSuccess(RedisStorage storage, params string[] routes)
+        {
+            JobStorage.Current = storage;
+
+            try
+            {
+                using var server = new TestServer(new WebHostBuilder()
+                    .ConfigureServices(services =>
+                    {
+                        JobStorage.Current = storage;
+                        services.AddHangfire(configuration => configuration.UseStorage(storage));
+                    })
+                    .Configure(app =>
+                    {
+                        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+                        {
+                            Authorization = new[] { new AllowAllDashboardAuthorizationFilter() },
+                            IgnoreAntiforgeryToken = true
+                        });
+                        app.Run(_ => Task.CompletedTask);
+                    }));
+
+                var client = server.CreateClient();
+
+                foreach (var route in routes)
+                {
+                    var response = await client.GetAsync(route);
+                    Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                }
+            }
+            finally
+            {
+                JobStorage.Current = null;
+            }
+        }
+
+        private static async Task AssertDashboardStatsRouteReturnsSuccess(RedisStorage storage)
+        {
+            JobStorage.Current = storage;
+
+            try
+            {
+                using var server = new TestServer(new WebHostBuilder()
+                    .ConfigureServices(services =>
+                    {
+                        JobStorage.Current = storage;
+                        services.AddHangfire(configuration => configuration.UseStorage(storage));
+                    })
+                    .Configure(app =>
+                    {
+                        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+                        {
+                            Authorization = new[] { new AllowAllDashboardAuthorizationFilter() },
+                            IgnoreAntiforgeryToken = true
+                        });
+                        app.Run(_ => Task.CompletedTask);
+                    }));
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, "/hangfire/stats")
+                {
+                    Content = new FormUrlEncodedContent(Array.Empty<KeyValuePair<string, string>>())
+                };
+
+                var response = await server.CreateClient().SendAsync(request);
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            }
+            finally
+            {
+                JobStorage.Current = null;
             }
         }
 

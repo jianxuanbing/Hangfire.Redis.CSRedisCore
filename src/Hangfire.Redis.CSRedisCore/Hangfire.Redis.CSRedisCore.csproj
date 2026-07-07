@@ -15,14 +15,6 @@
 		<OutputPath>$(MSBuildThisFileDirectory)/../../output/$(Configuration)/</OutputPath>
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-		<DocumentationFile>$(AssemblyName).xml</DocumentationFile>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-		<DocumentationFile>$(AssemblyName).xml</DocumentationFile>
-	</PropertyGroup>
-
 	<ItemGroup>
 		<!--移除Xml、DotSettings-->
 		<None Remove="$(AssemblyName).xml" />

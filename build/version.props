@@ -11,7 +11,7 @@
     <Authors>简玄冰</Authors>
     <Company>简玄冰</Company>
     <Copyright>简玄冰</Copyright>
-    <PackageLicenseUrl>https://github.com/jianxuanbing/Hangfire.Redis.CSRedisCore/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/jianxuanbing/Hangfire.Redis.CSRedisCore</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jianxuanbing/Hangfire.Redis.CSRedisCore</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

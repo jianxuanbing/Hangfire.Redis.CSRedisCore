@@ -278,7 +278,9 @@ namespace Hangfire.Redis.Tests
                     transaction.Commit();
                 }
 
-                Assert.Equal("trace-1", parameters["TraceId"]);
+                Assert.Equal(" 
+                
+                trace-1", parameters["TraceId"]);
 
                 var hash = redis.HGetAll($"{{hangfire}}:job:{jobId}");
                 Assert.Equal("trace-1", hash["TraceId"]);
@@ -287,6 +289,23 @@ namespace Hangfire.Redis.Tests
 
                 var ttlSeconds = redis.Ttl($"{{hangfire}}:job:{jobId}");
                 Assert.InRange(TimeSpan.FromSeconds(ttlSeconds), TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(65));
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void CreateJob_DoesNotApplyBeforeCommit()
+        {
+            UseConnection(redis =>
+            {
+                using var transaction = new RedisWriteOnlyTransaction(_storage);
+
+                var jobId = transaction.CreateJob(
+                    Job.FromExpression(() => RedisConnectionFacts.SampleMethods.NoArgs(), "critical"),
+                    new Dictionary<string, string> { { "TraceId", "trace-1" } },
+                    DateTime.UtcNow,
+                    TimeSpan.FromHours(1));
+
+                Assert.False(redis.Exists($"{{hangfire}}:job:{jobId}"));
             });
         }
 
