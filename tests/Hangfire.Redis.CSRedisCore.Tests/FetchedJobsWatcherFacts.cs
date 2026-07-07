@@ -132,6 +132,28 @@ namespace Hangfire.Redis.Tests
 
         }
 
+        [Fact]
+        public void Execute_RequeuesTimedOutJobs_FromAllQueues()
+        {
+            var redis = RedisUtils.RedisClient;
+
+            redis.SAdd("{hangfire}:queues", "critical");
+            redis.SAdd("{hangfire}:queues", "default");
+            redis.RPush("{hangfire}:queue:critical:dequeued", "critical-job");
+            redis.RPush("{hangfire}:queue:default:dequeued", "default-job");
+            redis.HSet("{hangfire}:job:critical-job", "Fetched", JobHelper.SerializeDateTime(DateTime.UtcNow.AddDays(-1)));
+            redis.HSet("{hangfire}:job:default-job", "Fetched", JobHelper.SerializeDateTime(DateTime.UtcNow.AddDays(-1)));
+
+            var watcher = CreateWatcher();
+
+            watcher.Execute(_cts.Token);
+
+            Assert.Equal("critical-job", (string)redis.RPop("{hangfire}:queue:critical"));
+            Assert.Equal("default-job", (string)redis.RPop("{hangfire}:queue:default"));
+            Assert.Equal(0, redis.LLen("{hangfire}:queue:critical:dequeued"));
+            Assert.Equal(0, redis.LLen("{hangfire}:queue:default:dequeued"));
+        }
+
         private FetchedJobsWatcher CreateWatcher()
         {
             return new FetchedJobsWatcher(_storage, InvisibilityTimeout);

@@ -23,6 +23,9 @@ public class RedisStorage : JobStorage, IDisposable
         JobStorageFeatures.ExtendedApi,
         JobStorageFeatures.Connection.BatchedGetFirstByLowest,
         JobStorageFeatures.Connection.GetUtcDateTime,
+        JobStorageFeatures.Transaction.CreateJob,
+        JobStorageFeatures.Transaction.SetJobParameter,
+        JobStorageFeatures.Transaction.RemoveFromQueue(typeof(RedisFetchedJob)),
         JobStorageFeatures.JobQueueProperty
     };
 

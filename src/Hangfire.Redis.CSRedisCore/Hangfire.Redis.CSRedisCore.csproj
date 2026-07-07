@@ -31,7 +31,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="CSRedisCore" Version="3.8.807" />
-		<PackageReference Include="Hangfire.Core" Version="1.8.23" />
+		<PackageReference Include="Hangfire.Core" Version="[1.8.0,2.0.0)" />
 		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

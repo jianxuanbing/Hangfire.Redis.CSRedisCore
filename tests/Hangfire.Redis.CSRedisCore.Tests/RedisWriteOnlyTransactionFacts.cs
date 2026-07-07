@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Hangfire.Common;
 using Hangfire.States;
+using Hangfire.Storage;
 using Moq;
 using Xunit;
 
@@ -219,6 +220,133 @@ namespace Hangfire.Redis.Tests
 
                 Assert.False(subscription.IsValueCreated);
                 Assert.Equal("{hangfire}:JobFetchChannel", _storage.SubscriptionChannel);
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void SetJobParameter_DoesNotApplyBeforeCommit()
+        {
+            UseConnection(redis =>
+            {
+                using var transaction = new RedisWriteOnlyTransaction(_storage);
+
+                transaction.SetJobParameter("my-job", "TraceId", "trace-1");
+
+                Assert.False(redis.HExists("{hangfire}:job:my-job", "TraceId"));
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void SetJobParameter_WritesFieldAfterCommit()
+        {
+            UseConnection(redis =>
+            {
+                Commit(redis, x => x.SetJobParameter("my-job", "TraceId", "trace-1"));
+
+                Assert.Equal("trace-1", redis.HGet("{hangfire}:job:my-job", "TraceId"));
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void SetJobParameter_AllowsNullValue()
+        {
+            UseConnection(redis =>
+            {
+                Commit(redis, x => x.SetJobParameter("my-job", "TraceId", null));
+
+                Assert.Equal(string.Empty, redis.HGet("{hangfire}:job:my-job", "TraceId"));
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void CreateJob_CreatesCommittedJob_AndKeepsInputParametersUntouched()
+        {
+            UseConnection(redis =>
+            {
+                var parameters = new Dictionary<string, string> { { "TraceId", "trace-1" } };
+                string jobId;
+                var createdAt = new DateTime(2026, 7, 7, 12, 0, 0, DateTimeKind.Utc);
+
+                using (var transaction = new RedisWriteOnlyTransaction(_storage))
+                {
+                    jobId = transaction.CreateJob(
+                        Job.FromExpression(() => RedisConnectionFacts.SampleMethods.NoArgs(), "critical"),
+                        parameters,
+                        createdAt,
+                        TimeSpan.FromHours(1));
+
+                    transaction.Commit();
+                }
+
+                Assert.Equal("trace-1", parameters["TraceId"]);
+
+                var hash = redis.HGetAll($"{{hangfire}}:job:{jobId}");
+                Assert.Equal("trace-1", hash["TraceId"]);
+                Assert.Equal("critical", hash["Queue"]);
+                Assert.Equal(createdAt, JobHelper.DeserializeDateTime(hash["CreatedAt"]));
+
+                var ttlSeconds = redis.Ttl($"{{hangfire}}:job:{jobId}");
+                Assert.InRange(TimeSpan.FromSeconds(ttlSeconds), TimeSpan.FromMinutes(55), TimeSpan.FromMinutes(65));
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void RemoveFromQueue_ThrowsAnException_WhenFetchedJobTypeIsUnsupported()
+        {
+            UseConnection(redis =>
+            {
+                using var transaction = new RedisWriteOnlyTransaction(_storage);
+
+                Assert.Throws<ArgumentException>(() => transaction.RemoveFromQueue(new FakeFetchedJob()));
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void RemoveFromQueue_RemovesJobOnlyAfterCommit()
+        {
+            UseConnection(redis =>
+            {
+                redis.RPush("{hangfire}:queue:critical:dequeued", "my-job");
+                redis.HSet("{hangfire}:job:my-job", "Fetched", JobHelper.SerializeDateTime(DateTime.UtcNow));
+
+                var fetchedJob = new RedisFetchedJob(_storage, redis, "my-job", "critical");
+
+                using (var transaction = new RedisWriteOnlyTransaction(_storage))
+                {
+                    transaction.RemoveFromQueue(fetchedJob);
+
+                    Assert.Equal(1, redis.LLen("{hangfire}:queue:critical:dequeued"));
+
+                    transaction.Commit();
+                }
+
+                Assert.Equal(0, redis.LLen("{hangfire}:queue:critical:dequeued"));
+                Assert.False(redis.HExists("{hangfire}:job:my-job", "Fetched"));
+
+                fetchedJob.Dispose();
+                Assert.Equal(0, redis.LLen("{hangfire}:queue:critical"));
+            });
+        }
+
+        [Fact, CleanRedis]
+        public void RemoveFromQueue_WithoutCommit_AllowsFetchedJobDisposeToRequeue()
+        {
+            UseConnection(redis =>
+            {
+                redis.RPush("{hangfire}:queue:critical:dequeued", "my-job");
+                redis.HSet("{hangfire}:job:my-job", "Fetched", JobHelper.SerializeDateTime(DateTime.UtcNow));
+
+                var fetchedJob = new RedisFetchedJob(_storage, redis, "my-job", "critical");
+
+                using (var transaction = new RedisWriteOnlyTransaction(_storage))
+                {
+                    transaction.RemoveFromQueue(fetchedJob);
+                }
+
+                fetchedJob.Dispose();
+
+                Assert.Equal(1, redis.LLen("{hangfire}:queue:critical"));
+                Assert.Equal(0, redis.LLen("{hangfire}:queue:critical:dequeued"));
             });
         }
 
@@ -442,6 +570,23 @@ namespace Hangfire.Redis.Tests
         {
             var field = typeof(RedisStorage).GetField("_subscription", BindingFlags.Instance | BindingFlags.NonPublic);
             return (Lazy<RedisSubscription>)field.GetValue(storage);
+        }
+
+        private sealed class FakeFetchedJob : IFetchedJob
+        {
+            public string JobId => "fake";
+
+            public void Dispose()
+            {
+            }
+
+            public void RemoveFromQueue()
+            {
+            }
+
+            public void Requeue()
+            {
+            }
         }
     }
 }

@@ -10,6 +10,18 @@ namespace Hangfire.Redis;
 /// </summary>
 internal class RedisFetchedJob : IFetchedJob
 {
+    private const string RemoveFromFetchedListScript = @"
+redis.call('LREM', KEYS[1], -1, ARGV[1])
+redis.call('HDEL', ARGV[2], 'Fetched', 'Checked')
+return 1";
+
+    private const string RequeueScript = @"
+redis.call('RPUSH', KEYS[1], ARGV[1])
+redis.call('PUBLISH', ARGV[2], ARGV[1])
+redis.call('LREM', ARGV[3], -1, ARGV[1])
+redis.call('HDEL', ARGV[4], 'Fetched', 'Checked')
+return 1";
+
     /// <summary>
     /// Redis存储
     /// </summary>
@@ -63,6 +75,8 @@ internal class RedisFetchedJob : IFetchedJob
     /// </summary>
     public string Queue { get; }
 
+    internal bool IsCompleted => _removedFromQueue || _requeued;
+
     /// <summary>
     /// 释放资源
     /// </summary>
@@ -83,19 +97,8 @@ internal class RedisFetchedJob : IFetchedJob
         if (_removedFromQueue || _requeued)
             return;
 
-        RemoveFromFetchedList();
+        ExecuteRemoveFromFetchedList(_redisClient, _storage, Queue, JobId);
         _removedFromQueue = true;
-    }
-
-    /// <summary>
-    /// 从已拉取列表中移除
-    /// </summary>
-    private void RemoveFromFetchedList()
-    {
-        _redisClient.StartPipe()
-            .LRem(_storage.GetRedisKey($"queue:{Queue}:dequeued"), -1, JobId)
-            .HDel(_storage.GetRedisKey($"job:{JobId}"), new[] { "Fetched", "Checked" })
-            .EndPipe();
     }
 
     /// <summary>
@@ -106,8 +109,50 @@ internal class RedisFetchedJob : IFetchedJob
         if (_requeued || _removedFromQueue)
             return;
 
-        _redisClient.RPush(_storage.GetRedisKey($"queue:{Queue}"), JobId);
-        RemoveFromFetchedList();
+        ExecuteRequeue(_redisClient, _storage, Queue, JobId);
         _requeued = true;
+    }
+
+    internal void MarkAsRemovedFromQueue()
+    {
+        _removedFromQueue = true;
+    }
+
+    internal static void ScheduleRemoveFromFetchedList(CSRedisClientPipe<string> redisClientPipe, RedisStorage storage, string queue, string jobId)
+    {
+        if (redisClientPipe == null)
+            throw new ArgumentNullException(nameof(redisClientPipe));
+
+        redisClientPipe.Eval(
+            RemoveFromFetchedListScript,
+            storage.GetRedisKey($"queue:{queue}:dequeued"),
+            jobId,
+            storage.GetRedisKey($"job:{jobId}"));
+    }
+
+    internal static void ExecuteRemoveFromFetchedList(CSRedisClient redisClient, RedisStorage storage, string queue, string jobId)
+    {
+        if (redisClient == null)
+            throw new ArgumentNullException(nameof(redisClient));
+
+        redisClient.Eval(
+            RemoveFromFetchedListScript,
+            storage.GetRedisKey($"queue:{queue}:dequeued"),
+            jobId,
+            storage.GetRedisKey($"job:{jobId}"));
+    }
+
+    internal static void ExecuteRequeue(CSRedisClient redisClient, RedisStorage storage, string queue, string jobId)
+    {
+        if (redisClient == null)
+            throw new ArgumentNullException(nameof(redisClient));
+
+        redisClient.Eval(
+            RequeueScript,
+            storage.GetRedisKey($"queue:{queue}"),
+            jobId,
+            storage.SubscriptionChannel,
+            storage.GetRedisKey($"queue:{queue}:dequeued"),
+            storage.GetRedisKey($"job:{jobId}"));
     }
 }

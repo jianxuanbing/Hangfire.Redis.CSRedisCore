@@ -1,15 +1,19 @@
 ﻿using System;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
+using Hangfire.Common;
 using Hangfire.Dashboard;
 using System.Linq;
 using Hangfire.Redis.States;
+using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Sdk;
 
 namespace Hangfire.Redis.Tests
 {
@@ -44,12 +48,68 @@ namespace Hangfire.Redis.Tests
             Assert.True(storage.HasFeature(JobStorageFeatures.Connection.BatchedGetFirstByLowest));
             Assert.True(storage.HasFeature(JobStorageFeatures.Connection.GetUtcDateTime));
             Assert.True(storage.HasFeature(JobStorageFeatures.JobQueueProperty));
-            Assert.False(storage.HasFeature(JobStorageFeatures.Transaction.CreateJob));
-            Assert.False(storage.HasFeature(JobStorageFeatures.Transaction.SetJobParameter));
-            Assert.False(storage.HasFeature(JobStorageFeatures.Transaction.RemoveFromQueue(typeof(RedisFetchedJob))));
+            Assert.True(storage.HasFeature(JobStorageFeatures.Transaction.CreateJob));
+            Assert.True(storage.HasFeature(JobStorageFeatures.Transaction.SetJobParameter));
+            Assert.True(storage.HasFeature(JobStorageFeatures.Transaction.RemoveFromQueue(typeof(RedisFetchedJob))));
             Assert.False(storage.HasFeature(JobStorageFeatures.Transaction.AcquireDistributedLock));
             Assert.False(storage.HasFeature(JobStorageFeatures.Monitoring.DeletedStateGraphs));
             Assert.False(storage.HasFeature(JobStorageFeatures.Monitoring.AwaitingJobs));
+        }
+
+        [Fact, CleanRedis]
+        public async Task BackgroundJobServer_ProcessesCriticalAndDefaultJobs()
+        {
+            using var storage = CreateStorage();
+            GlobalConfiguration.Configuration.UseNoOpLogProvider();
+
+            var client = new BackgroundJobClient(storage);
+
+            var criticalJobId = client.Create(
+                Hangfire.Common.Job.FromExpression(() => RedisUtils.RecordExecution("critical"), "critical"),
+                new EnqueuedState());
+
+            var defaultJobId = client.Create(
+                Hangfire.Common.Job.FromExpression(() => RedisUtils.RecordExecution("default")),
+                new EnqueuedState());
+
+            using var server = new BackgroundJobServer(new BackgroundJobServerOptions
+            {
+                WorkerCount = 1,
+                Queues = new[] { "critical", "default" },
+                Activator = new JobActivator(),
+                FilterProvider = JobFilterProviders.Providers
+            }, storage);
+
+            try
+            {
+                await WaitUntilAsync(() => RedisUtils.RedisClient.LLen(RedisUtils.ExecutedJobsKey) == 2, TimeSpan.FromSeconds(30));
+            }
+            catch (OperationCanceledException)
+            {
+                using var diagnosticConnection = storage.GetConnection();
+                var criticalJob = diagnosticConnection.GetJobData(criticalJobId);
+                var defaultJob = diagnosticConnection.GetJobData(defaultJobId);
+
+                throw new XunitException(
+                    $"Timed out waiting for jobs. " +
+                    $"criticalState={criticalJob?.State ?? "<null>"}, " +
+                    $"defaultState={defaultJob?.State ?? "<null>"}, " +
+                    $"criticalQueue={RedisUtils.RedisClient.LLen("{hangfire}:queue:critical")}, " +
+                    $"defaultQueue={RedisUtils.RedisClient.LLen("{hangfire}:queue:default")}, " +
+                    $"criticalDequeued={RedisUtils.RedisClient.LLen("{hangfire}:queue:critical:dequeued")}, " +
+                    $"defaultDequeued={RedisUtils.RedisClient.LLen("{hangfire}:queue:default:dequeued")}, " +
+                    $"executed={string.Join(",", RedisUtils.RedisClient.LRange(RedisUtils.ExecutedJobsKey, 0, -1))}");
+            }
+
+            using var connection = storage.GetConnection();
+            Assert.Equal(SucceededState.StateName, connection.GetJobData(criticalJobId).State);
+            Assert.Equal(SucceededState.StateName, connection.GetJobData(defaultJobId).State);
+
+            Assert.Equal(new[] { "critical", "default" }, RedisUtils.RedisClient.LRange(RedisUtils.ExecutedJobsKey, 0, -1).ToArray());
+            Assert.Equal(0, RedisUtils.RedisClient.LLen("{hangfire}:queue:critical"));
+            Assert.Equal(0, RedisUtils.RedisClient.LLen("{hangfire}:queue:default"));
+            Assert.Equal(0, RedisUtils.RedisClient.LLen("{hangfire}:queue:critical:dequeued"));
+            Assert.Equal(0, RedisUtils.RedisClient.LLen("{hangfire}:queue:default:dequeued"));
         }
 
         [Fact, CleanRedis]
@@ -104,6 +164,17 @@ namespace Hangfire.Redis.Tests
         private sealed class AllowAllDashboardAuthorizationFilter : IDashboardAuthorizationFilter
         {
             public bool Authorize(DashboardContext context) => true;
+        }
+
+        private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+        {
+            using var cts = new CancellationTokenSource(timeout);
+
+            while (!condition())
+            {
+                cts.Token.ThrowIfCancellationRequested();
+                await Task.Delay(100, cts.Token);
+            }
         }
     }
 }

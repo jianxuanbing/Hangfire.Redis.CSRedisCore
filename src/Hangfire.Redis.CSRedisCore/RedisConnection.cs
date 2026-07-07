@@ -111,20 +111,7 @@ internal class RedisConnection : JobStorageConnection
         if (parameters == null)
             throw new ArgumentNullException(nameof(parameters));
         var jobId = Guid.NewGuid().ToString("n");
-        var invocationData = InvocationData.SerializeJob(job);
-
-        // 不要修改原始参数
-        var storedParameters = new Dictionary<string, string>(parameters)
-        {
-            {"Type",invocationData.Type},
-            {"Method",invocationData.Method },
-            { "ParameterTypes", invocationData.ParameterTypes },
-            { "Arguments", invocationData.Arguments },
-            { "CreatedAt", JobHelper.SerializeDateTime(createdAt) }
-        };
-
-        if (!string.IsNullOrWhiteSpace(invocationData.Queue))
-            storedParameters["Queue"] = invocationData.Queue;
+        var storedParameters = CreateJobHash(job, parameters, createdAt);
 
         RedisClient.StartPipe()
             .HMSet(_storage.GetRedisKey($"job:{jobId}"), storedParameters.DicToObjectArray())
@@ -475,6 +462,26 @@ internal class RedisConnection : JobStorageConnection
         if (keyValuePairs == null)
             throw new ArgumentNullException(nameof(keyValuePairs));
         RedisClient.HMSet(GetRequiredRedisKey(key), keyValuePairs.DicToObjectArray());
+    }
+
+    internal static Dictionary<string, string> CreateJobHash(Job job, IDictionary<string, string> parameters, DateTime createdAt)
+    {
+        var invocationData = InvocationData.SerializeJob(job);
+
+        // 不要修改原始参数
+        var storedParameters = new Dictionary<string, string>(parameters)
+        {
+            { "Type", invocationData.Type },
+            { "Method", invocationData.Method },
+            { "ParameterTypes", invocationData.ParameterTypes },
+            { "Arguments", invocationData.Arguments },
+            { "CreatedAt", JobHelper.SerializeDateTime(createdAt) }
+        };
+
+        if (!string.IsNullOrWhiteSpace(invocationData.Queue))
+            storedParameters["Queue"] = invocationData.Queue;
+
+        return storedParameters;
     }
 
     private string GetRequiredRedisKey(string key)

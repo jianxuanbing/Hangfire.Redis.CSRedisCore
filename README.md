@@ -1,14 +1,12 @@
 # Hangfire.Redis.CSRedisCore
 
-`Hangfire.Redis.CSRedisCore` 是基于 `CSRedisCore` 的 Hangfire Redis Storage Provider。
+`Hangfire.Redis.CSRedisCore` 是基于 `CSRedisCore` 的 Hangfire Redis Storage Provider，当前仓库只支持 `Hangfire.Core 1.8.x`。
 
-当前版本已完成 Hangfire.Core 1.8 基础兼容：
+## 版本范围
 
-- 保持 `netstandard2.0`
-- 支持 Hangfire 1.8 的 Job Queue Property
-- 支持 `Connection.GetUtcDateTime`
-- 保持现有 Redis key 结构兼容
-- 旧任务缺少 `Queue` 字段时仍可读取
+- 主库依赖 `Hangfire.Core [1.8.0,2.0.0)`
+- sample / tests 使用 `Hangfire.AspNetCore 1.8.23`
+- 不再承诺 Hangfire 1.7 兼容性
 
 ## 安装
 
@@ -22,116 +20,75 @@ dotnet add package Hangfire.Redis.CSRedisCore
 var redisClient = new CSRedisClient("127.0.0.1:6379,defaultDatabase=1,poolsize=50");
 
 GlobalConfiguration.Configuration
-    .UseRedisStorage(redisClient, new RedisStorageOptions
-    {
-        Prefix = "{hangfire}:"
-    });
-```
-
-## Hangfire 1.8 兼容级别
-
-升级建议分两阶段进行。
-
-第一阶段，集群内仍存在旧版 Server 时：
-
-```csharp
-GlobalConfiguration.Configuration
-    .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
-    .UseRedisStorage(redisClient, new RedisStorageOptions
-    {
-        Prefix = "{hangfire}:"
-    });
-```
-
-第二阶段，所有 Server 都升级完成后：
-
-```csharp
-GlobalConfiguration.Configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
     .UseRedisStorage(redisClient, new RedisStorageOptions
     {
-        Prefix = "{hangfire}:"
+        Prefix = RedisStorageOptions.DefaultPrefix
     });
 ```
 
-## Queue 支持
+如果所有 server 还没有一起升级到 Hangfire 1.8，请先完成 server 升级，再切换到 `CompatibilityLevel.Version_180`。
 
-Hangfire 1.8 已支持 Job 级别的 `Queue` 属性，本存储已支持该字段的持久化和读取。
+## 队列与 key 兼容
 
-默认队列示例：
+- 保持现有 Redis key 结构：`job:{id}`、`queue:{queue}`、`queue:{queue}:dequeued`、`queues`
+- `Job.Queue` 作为 `job:{id}` hash 的可选字段写入
+- 旧 job hash 没有 `Queue` 字段时仍可读取
+- 默认前缀是 `"{hangfire}:"`，保留 Redis Cluster hash tag
 
-```csharp
-BackgroundJob.Enqueue(() => Console.WriteLine("default queue"));
+## CSRedisCore 配置约束
+
+- Redis database 必须通过 `CSRedisClient` / 连接串控制，例如 `defaultDatabase=1`
+- `RedisStorageOptions.Db` 已废弃，不参与数据库选择
+- 不要同时配置 CSRedisCore 全局 prefix 和 Hangfire prefix
+
+## Hangfire 1.8 feature matrix
+
+当前已支持：
+
+- `Storage.ExtendedApi`
+- `Connection.BatchedGetFirstByLowestScoreFromSet`
+- `Connection.GetUtcDateTime`
+- `Job.Queue`
+- `Transaction.CreateJob`
+- `Transaction.SetJobParameter`
+- `Transaction.RemoveFromQueue(typeof(RedisFetchedJob))`
+
+当前明确不支持：
+
+- `Transaction.AcquireDistributedLock`
+- `Monitoring.DeletedStateGraphs`
+- `Monitoring.AwaitingJobs`
+
+说明：本 provider 的 write transaction 基于 `CSRedisCore` 的 pipelined write 路径，不提供可回滚的 Redis 事务语义，因此只开启了已经有真实实现和测试覆盖的 Hangfire 1.8 feature。
+
+## Sample
+
+sample 项目位于 [samples/Hangfire.Redis.Sample/Program.cs](/e:/Bing_Framework/Hangfire.Redis.CSRedisCore/samples/Hangfire.Redis.Sample/Program.cs:1) 和 [samples/Hangfire.Redis.Sample/Startup.cs](/e:/Bing_Framework/Hangfire.Redis.CSRedisCore/samples/Hangfire.Redis.Sample/Startup.cs:1)，默认展示：
+
+- `CompatibilityLevel.Version_180`
+- `critical` / `default` 两个队列
+- 一个 `critical` 启动作业
+- 一个默认队列延时作业
+- 一个默认队列 recurring 作业
+
+本地运行 sample：
+
+```powershell
+dotnet run --project .\samples\Hangfire.Redis.Sample\Hangfire.Redis.Sample.csproj
 ```
 
-如果项目使用自定义队列，请同时配置 Server 的 `Queues`：
-
-```csharp
-app.UseHangfireServer(new BackgroundJobServerOptions
-{
-    Queues = new[] { "critical", "default" }
-});
-```
-
-## CSRedisCore 配置说明
-
-- Redis 连接由 `CSRedisClient` 管理
-- Redis database 建议在连接串中指定，例如 `defaultDatabase=1`
-- `RedisStorageOptions.Db` 当前不参与 `CSRedisClient` 的数据库选择
-- Hangfire Key Prefix 建议使用 `"{hangfire}:"`
-- Redis Cluster 下不要破坏 `{hangfire}` hash tag
-- 不建议同时配置 CSRedisCore 全局 prefix 和 Hangfire Prefix
-
-## Prefix 说明
-
-- 默认 `Prefix` 为 `"{hangfire}:"`
-- 升级到 Hangfire 1.8 不需要修改现有 Hangfire Redis key
-- 新增的 `Queue` 信息仅写入现有 `job:{id}` Hash 的可选字段 `Queue`
-
-## 示例
-
-```csharp
-var storage = new RedisStorage(redisClient, new RedisStorageOptions
-{
-    Prefix = "{hangfire}:"
-});
-
-services.AddHangfire(configuration => configuration
-    .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
-    .UseStorage(storage));
-
-services.AddHangfireServer(options =>
-{
-    options.Queues = new[] { "critical", "default" };
-});
-```
+打开 `http://localhost:5000/hangfire`。
 
 ## 测试
 
 测试默认连接本地 Redis：
 
-- Host: `127.0.0.1:6379`
-- Database: `1`
+- `127.0.0.1:6379`
+- `defaultDatabase=1`
 
 运行命令：
 
 ```powershell
-dotnet test .\Hangfire.Redis.CSRedisCore.sln
+dotnet test .\tests\Hangfire.Redis.CSRedisCore.Tests\Hangfire.Redis.CSRedisCore.Tests.csproj
 ```
-
-## 已支持的 Hangfire 1.8 能力
-
-- `Storage.ExtendedApi`
-- `Connection.GetUtcDateTime`
-- `Job.Queue`
-
-以下能力当前未声明支持：
-
-- `Transaction.CreateJob`
-- `Transaction.SetJobParameter`
-- `Transaction.RemoveFromQueue`
-- `Transaction.AcquireDistributedLock`
-- `Monitoring.DeletedStateGraphs`
-- `Monitoring.AwaitingJobs`
-
-这些能力会在具备真实实现后再开启。

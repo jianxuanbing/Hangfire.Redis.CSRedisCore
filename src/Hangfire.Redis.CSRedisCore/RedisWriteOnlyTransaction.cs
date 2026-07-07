@@ -25,6 +25,16 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     private readonly CSRedisClientPipe<string> _redisClientPipe;
 
     /// <summary>
+    /// 事务内已确认的拉取作业
+    /// </summary>
+    private readonly HashSet<RedisFetchedJob> _removedFetchedJobs = new HashSet<RedisFetchedJob>();
+
+    /// <summary>
+    /// 是否已提交
+    /// </summary>
+    private bool _committed;
+
+    /// <summary>
     /// 初始化一个<see cref="RedisWriteOnlyTransaction"/>类型的实例
     /// </summary>
     /// <param name="storage">Redis存储</param>
@@ -89,7 +99,15 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     /// <summary>
     /// 提交
     /// </summary>
-    public override void Commit() => _redisClientPipe.EndPipe();
+    public override void Commit()
+    {
+        _redisClientPipe.EndPipe();
+
+        foreach (var fetchedJob in _removedFetchedJobs)
+            fetchedJob.MarkAsRemovedFromQueue();
+
+        _committed = true;
+    }
 
     /// <summary>
     /// 设置 作业 过期时间
@@ -181,6 +199,46 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
         else
             _redisClientPipe.LPush(_storage.GetRedisKey($"queue:{queue}"), jobId);
         _redisClientPipe.Publish(_storage.SubscriptionChannel, jobId);
+    }
+
+    public override void RemoveFromQueue(IFetchedJob fetchedJob)
+    {
+        if (fetchedJob == null)
+            throw new ArgumentNullException(nameof(fetchedJob));
+
+        if (fetchedJob is not RedisFetchedJob redisFetchedJob)
+            throw new ArgumentException($"Only {nameof(RedisFetchedJob)} is supported.", nameof(fetchedJob));
+
+        if (redisFetchedJob.IsCompleted || !_removedFetchedJobs.Add(redisFetchedJob))
+            return;
+
+        RedisFetchedJob.ScheduleRemoveFromFetchedList(_redisClientPipe, _storage, redisFetchedJob.Queue, redisFetchedJob.JobId);
+    }
+
+    public override void SetJobParameter(string jobId, string name, string value)
+    {
+        if (jobId == null)
+            throw new ArgumentNullException(nameof(jobId));
+        if (name == null)
+            throw new ArgumentNullException(nameof(name));
+
+        _redisClientPipe.HSet(_storage.GetRedisKey($"job:{jobId}"), name, value);
+    }
+
+    public override string CreateJob(Job job, IDictionary<string, string> parameters, DateTime createdAt, TimeSpan expireIn)
+    {
+        if (job == null)
+            throw new ArgumentNullException(nameof(job));
+        if (parameters == null)
+            throw new ArgumentNullException(nameof(parameters));
+
+        var jobId = Guid.NewGuid().ToString("n");
+        var storedParameters = RedisConnection.CreateJobHash(job, parameters, createdAt);
+        var jobKey = _storage.GetRedisKey($"job:{jobId}");
+
+        _redisClientPipe.HMSet(jobKey, storedParameters.DicToObjectArray());
+        _redisClientPipe.Expire(jobKey, expireIn);
+        return jobId;
     }
 
     /// <summary>
@@ -294,7 +352,13 @@ internal class RedisWriteOnlyTransaction : JobStorageTransaction
     /// <summary>
     /// 释放资源
     /// </summary>
-    public override void Dispose() => _redisClientPipe.Dispose();
+    public override void Dispose()
+    {
+        if (!_committed)
+            _removedFetchedJobs.Clear();
+
+        _redisClientPipe.Dispose();
+    }
 
     private string GetRequiredRedisKey(string key)
     {

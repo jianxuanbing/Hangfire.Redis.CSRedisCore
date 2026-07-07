@@ -1,41 +1,50 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using Hangfire;
+using Hangfire.Common;
+using Hangfire.States;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Localization;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Hangfire.Redis.Sample
 {
     public class Startup
     {
-        // This method gets called by the runtime. Use this method to add services to the container.
-        // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
-        public void ConfigureServices(IServiceCollection services)
-        {
-            var storage = new RedisStorage("127.0.0.1:6379,defaultDatabase=1,poolsize=50", new RedisStorageOptions
-            {
-                Prefix = "{hangfire}:"
-            });
-            services.AddHangfire(o =>
-            {
-                o.SetDataCompatibilityLevel(CompatibilityLevel.Version_170);
-                o.UseStorage(storage);
-            });
-            services.AddHangfireServer((sp) =>
-            {
-                sp.Queues = new[] { "critical", "default" };
-            });
-            JobStorage.Current = storage;
+        private readonly IConfiguration _configuration;
 
+        public Startup(IConfiguration configuration)
+        {
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void ConfigureServices(IServiceCollection services)
+        {
+            var storage = new RedisStorage(_configuration["Redis:ConnectionString"], new RedisStorageOptions
+            {
+                Prefix = _configuration["Redis:Prefix"] ?? RedisStorageOptions.DefaultPrefix
+            });
+
+            services.AddHangfire(o =>
+            {
+                o.SetDataCompatibilityLevel(CompatibilityLevel.Version_180);
+                o.UseStorage(storage);
+            });
+
+            services.AddHangfireServer(options =>
+            {
+                options.Queues = _configuration.GetSection("Hangfire:Queues").Get<string[]>() ?? new[] { "critical", "default" };
+            });
+
+            JobStorage.Current = storage;
+        }
+
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
             {
@@ -60,20 +69,41 @@ namespace Hangfire.Redis.Sample
                     new AcceptLanguageHeaderRequestCultureProvider()
                 }
             });
-            app.UseHangfireDashboard(options: new DashboardOptions
+
+            app.UseHangfireDashboard("/hangfire", new DashboardOptions
             {
                 IgnoreAntiforgeryToken = true,
-                DisplayStorageConnectionString = false, // 是否显示数据库连接信息
+                DisplayStorageConnectionString = false,
                 IsReadOnlyFunc = context => false,
             });
-            //app.UseHangfireServer(new BackgroundJobServerOptions
-            //{
-            //    Queues = new []{"critical","default"}
-            //});
-            RecurringJob.AddOrUpdate(() => Console.WriteLine($"输出内容：{DateTime.Now:yyyy-MM-dd HH:mm:ss.sss}"), "*/1 * * * * ? ", TimeZoneInfo.Local);
-            for (var i = 0; i <= 50; i++)
-                BackgroundJob.Schedule(() => Console.WriteLine($"测试延时任务-输出内容：{DateTime.Now:yyyy-MM-dd HH:mm:ss.sss}"), TimeSpan.FromMinutes(1 + i));
 
+            var client = new BackgroundJobClient();
+            client.Create(
+                Job.FromExpression(() => SampleJobs.Write("critical startup job"), "critical"),
+                new EnqueuedState());
+
+            client.Create(
+                Job.FromExpression(() => SampleJobs.Write("default delayed job")),
+                new ScheduledState(TimeSpan.FromMinutes(1)));
+
+            RecurringJob.AddOrUpdate(
+                "sample-default-recurring",
+                () => SampleJobs.Write("default recurring job"),
+                Cron.Minutely);
+
+            app.Run(context =>
+            {
+                context.Response.Redirect("/hangfire");
+                return System.Threading.Tasks.Task.CompletedTask;
+            });
+        }
+
+        public static class SampleJobs
+        {
+            public static void Write(string message)
+            {
+                Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}");
+            }
         }
     }
 }
