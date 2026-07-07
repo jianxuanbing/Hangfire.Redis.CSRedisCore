@@ -336,3 +336,6 @@ ASALocalRun/
 
 Bing*.xml
 /src/Hangfire.Redis.CSRedisCore/Hangfire.Redis.CSRedisCore.xml
+
+
+.artifacts/
