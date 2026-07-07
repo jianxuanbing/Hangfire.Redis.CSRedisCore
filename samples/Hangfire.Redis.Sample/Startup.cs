@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using Hangfire;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -18,12 +19,16 @@ namespace Hangfire.Redis.Sample
         {
             var storage = new RedisStorage("127.0.0.1:6379,defaultDatabase=1,poolsize=50", new RedisStorageOptions
             {
-                Prefix = "hangfire.dev:"
+                Prefix = "{hangfire}:"
             });
-            services.AddHangfire(o => { o.UseStorage(storage); });
+            services.AddHangfire(o =>
+            {
+                o.SetDataCompatibilityLevel(CompatibilityLevel.Version_170);
+                o.UseStorage(storage);
+            });
             services.AddHangfireServer((sp) =>
             {
-                sp.Queues = new[] { "dev", "test", "pred", "prod", "default" };
+                sp.Queues = new[] { "critical", "default" };
             });
             JobStorage.Current = storage;
 
@@ -63,7 +68,7 @@ namespace Hangfire.Redis.Sample
             });
             //app.UseHangfireServer(new BackgroundJobServerOptions
             //{
-            //    Queues = new []{"dev","test","pred","prod","default"}
+            //    Queues = new []{"critical","default"}
             //});
             RecurringJob.AddOrUpdate(() => Console.WriteLine($"输出内容：{DateTime.Now:yyyy-MM-dd HH:mm:ss.sss}"), "*/1 * * * * ? ", TimeZoneInfo.Local);
             for (var i = 0; i <= 50; i++)

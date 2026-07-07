@@ -176,7 +176,12 @@ public class RedisMonitoringApi : IMonitoringApi
 
             return new JobDetailsDto
             {
-                Job = TryToGetJob(job["Type"], job["Method"], job["ParameterTypes"], job["Arguments"]),
+                Job = TryToGetJob(
+                    job["Type"],
+                    job["Method"],
+                    job["ParameterTypes"],
+                    job["Arguments"],
+                    job.TryGetValue("Queue", out var queue) ? queue : null),
                 CreatedAt =
                     job.ContainsKey("CreatedAt")
                         ? JobHelper.DeserializeDateTime(job["CreatedAt"])
@@ -338,7 +343,7 @@ public class RedisMonitoringApi : IMonitoringApi
             {
                 var jobId = scheduledJob.member;
                 var v1 = _redisClient.HMGet(
-                    _storage.GetRedisKey($"job:{jobId}"), "Type", "Method", "ParameterTypes", "Arguments");
+                    _storage.GetRedisKey($"job:{jobId}"), "Type", "Method", "ParameterTypes", "Arguments", "Queue");
 
                 jobs.TryAdd(jobId, v1.ToList());
                 i++;
@@ -356,7 +361,7 @@ public class RedisMonitoringApi : IMonitoringApi
                     {
                         EnqueueAt = JobHelper.FromTimestamp((long) job.score),
                         Job = TryToGetJob(jobs[job.member][0], jobs[job.member][1], jobs[job.member][2],
-                            jobs[job.member][3]),
+                            jobs[job.member][3], jobs[job.member][4]),
                         ScheduledAt =
                             states[job.member].Count > 1
                                 ? JobHelper.DeserializeNullableDateTime(states[job.member][1])
@@ -596,7 +601,7 @@ public class RedisMonitoringApi : IMonitoringApi
         properties = properties ?? new string[0];
 
         var extendedProperties = properties
-            .Concat(new[] { "Type", "Method", "ParameterTypes", "Arguments" })
+            .Concat(new[] { "Type", "Method", "ParameterTypes", "Arguments", "Queue" })
             .ToArray();
 
         var tasks = new List<Task>(jobIds.Length * 2);
@@ -628,7 +633,8 @@ public class RedisMonitoringApi : IMonitoringApi
                     jobs[jobId].Result[properties.Length],
                     jobs[jobId].Result[properties.Length + 1],
                     jobs[jobId].Result[properties.Length + 2],
-                    jobs[jobId].Result[properties.Length + 3]),
+                    jobs[jobId].Result[properties.Length + 3],
+                    jobs[jobId].Result[properties.Length + 4]),
                 State = stateProperties != null ? states[jobId].Result : null
             })
             .Select(x => new KeyValuePair<string, T>(
@@ -653,11 +659,11 @@ public class RedisMonitoringApi : IMonitoringApi
     /// <param name="method">方法</param>
     /// <param name="parameterTypes">参数类型</param>
     /// <param name="arguments">参数</param>
-    private static Job TryToGetJob(string type, string method, string parameterTypes, string arguments)
+    private static Job TryToGetJob(string type, string method, string parameterTypes, string arguments, string queue)
     {
         try
         {
-            return new InvocationData(type, method, parameterTypes, arguments).DeserializeJob();
+            return new InvocationData(type, method, parameterTypes, arguments, queue).DeserializeJob();
         }
         catch (Exception)
         {

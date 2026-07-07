@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Hangfire.Redis.Tests
 {
-    public class RedisFetchedJobFacts
+    public class RedisFetchedJobFacts : IDisposable
     {
         private const string JobId = "id";
         private const string Queue = "queue";
@@ -16,6 +16,8 @@ namespace Hangfire.Redis.Tests
             var options = new RedisStorageOptions() { };
             _storage = new RedisStorage(RedisUtils.RedisClient, options);
         }
+
+        public void Dispose() => _storage.Dispose();
 
         [Fact]
         public void Ctor_ThrowsAnException_WhenStorageIsNull()

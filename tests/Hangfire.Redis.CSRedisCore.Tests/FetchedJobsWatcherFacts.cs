@@ -6,7 +6,7 @@ using Xunit;
 namespace Hangfire.Redis.Tests
 {
     [CleanRedis]
-    public class FetchedJobsWatcherFacts
+    public class FetchedJobsWatcherFacts : IDisposable
     {
         private static readonly TimeSpan InvisibilityTimeout = TimeSpan.FromSeconds(10);
 
@@ -20,6 +20,8 @@ namespace Hangfire.Redis.Tests
             _cts = new CancellationTokenSource();
             _cts.Cancel();
         }
+
+        public void Dispose() => _storage.Dispose();
 
         [Fact]
         public void Ctor_ThrowsAnException_WhenStorageIsNull()
@@ -67,7 +69,7 @@ namespace Hangfire.Redis.Tests
             Assert.DoesNotContain(job, x => x.Key == "Fetched");
         }
 
-        [Fact, CleanRedis]
+        [Fact]
         public void Execute_MarksDequeuedJobAsChecked_IfItHasNoFetchedFlagSet()
         {
             var redis = RedisUtils.RedisClient;
@@ -84,7 +86,7 @@ namespace Hangfire.Redis.Tests
                 redis.HGet("{hangfire}:job:my-job", "Checked")));
         }
 
-        [Fact, CleanRedis]
+        [Fact]
         public void Execute_EnqueuesCheckedAndTimedOutJob_IfNoFetchedFlagSet()
         {
             var redis = RedisUtils.RedisClient;
@@ -107,7 +109,7 @@ namespace Hangfire.Redis.Tests
             Assert.DoesNotContain(job, x => x.Key == "Checked");
         }
 
-        [Fact, CleanRedis]
+        [Fact]
         public void Execute_DoesNotEnqueueTimedOutByCheckedFlagJob_IfFetchedFlagSet()
         {
             var redis = RedisUtils.RedisClient;

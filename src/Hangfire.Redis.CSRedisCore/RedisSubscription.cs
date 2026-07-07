@@ -9,7 +9,7 @@ namespace Hangfire.Redis;
 /// <summary>
 /// Redis订阅
 /// </summary>
-internal class RedisSubscription : IServerComponent
+internal class RedisSubscription : IServerComponent, IDisposable
 {
     /// <summary>
     /// 手动重置事件
@@ -27,9 +27,19 @@ internal class RedisSubscription : IServerComponent
     private readonly CSRedisClient _redisClient;
 
     /// <summary>
+    /// 同步锁
+    /// </summary>
+    private readonly object _syncRoot = new object();
+
+    /// <summary>
     /// 订阅对象
     /// </summary>
     private SubscribeObject _subscribeObject;
+
+    /// <summary>
+    /// 是否已释放
+    /// </summary>
+    private bool _disposed;
 
     /// <summary>
     /// 初始化一个<see cref="RedisSubscription"/>类型的实例
@@ -41,7 +51,6 @@ internal class RedisSubscription : IServerComponent
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _redisClient = redisClient ?? throw new ArgumentNullException(nameof(redisClient));
         Channel = _storage.GetRedisKey("JobFetchChannel");
-        _subscribeObject = _redisClient.Subscribe((Channel, r => _mre.Set()));
     }
 
     /// <summary>
@@ -55,13 +64,10 @@ internal class RedisSubscription : IServerComponent
     /// <param name="cancellationToken">取消令牌</param>
     public void Execute(CancellationToken cancellationToken)
     {
+        EnsureSubscribed();
         cancellationToken.WaitHandle.WaitOne();
         if (cancellationToken.IsCancellationRequested)
-        {
-            _subscribeObject.Unsubscribe();
-            _mre.Dispose();
-            _subscribeObject.Dispose();
-        }
+            Dispose();
     }
 
     /// <summary>
@@ -71,7 +77,33 @@ internal class RedisSubscription : IServerComponent
     /// <param name="cancellationToken">取消令牌</param>
     public void WaitForJob(TimeSpan timeout, CancellationToken cancellationToken)
     {
+        EnsureSubscribed();
         _mre.Reset();
         WaitHandle.WaitAny(new[] {_mre, cancellationToken.WaitHandle}, timeout);
+    }
+
+    public void Dispose()
+    {
+        lock (_syncRoot)
+        {
+            if (_disposed)
+                return;
+
+            _subscribeObject?.Unsubscribe();
+            _subscribeObject?.Dispose();
+            _mre.Dispose();
+            _disposed = true;
+        }
+    }
+
+    private void EnsureSubscribed()
+    {
+        lock (_syncRoot)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(RedisSubscription));
+
+            _subscribeObject ??= _redisClient.Subscribe((Channel, r => _mre.Set()));
+        }
     }
 }

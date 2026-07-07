@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using CSRedis;
 using Hangfire.Annotations;
 using Hangfire.Dashboard;
@@ -15,17 +16,34 @@ namespace Hangfire.Redis;
 /// <summary>
 /// 基于CSRedisCore实现的Redis存储
 /// </summary>
-public class RedisStorage : JobStorage
+public class RedisStorage : JobStorage, IDisposable
 {
+    private static readonly HashSet<string> SupportedFeatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        JobStorageFeatures.ExtendedApi,
+        JobStorageFeatures.Connection.GetUtcDateTime,
+        JobStorageFeatures.JobQueueProperty
+    };
+
     /// <summary>
     /// Redis存储选项配置
     /// </summary>
     private readonly RedisStorageOptions _options;
 
     /// <summary>
+    /// 是否拥有 Redis 客户端实例
+    /// </summary>
+    private readonly bool _ownsRedisClient;
+
+    /// <summary>
     /// Redis订阅
     /// </summary>
-    private readonly RedisSubscription _subscription;
+    private readonly Lazy<RedisSubscription> _subscription;
+
+    /// <summary>
+    /// 是否已释放
+    /// </summary>
+    private bool _disposed;
 
     /// <summary>
     /// Redis客户端
@@ -48,8 +66,9 @@ public class RedisStorage : JobStorage
             throw new ArgumentNullException(nameof(connectionString));
         // TODO: 此处需要对连接字符串进行解析
         _options = options ?? new RedisStorageOptions();
+        _ownsRedisClient = true;
         RedisClient = new CSRedisClient(connectionString);
-        _subscription = new RedisSubscription(this, RedisClient);
+        _subscription = CreateSubscriptionFactory();
     }
 
     /// <summary>
@@ -61,7 +80,8 @@ public class RedisStorage : JobStorage
     {
         RedisClient = redisClient;
         _options = options ?? new RedisStorageOptions();
-        _subscription = new RedisSubscription(this, redisClient);
+        _ownsRedisClient = false;
+        _subscription = CreateSubscriptionFactory();
     }
 
     /// <summary>
@@ -77,7 +97,7 @@ public class RedisStorage : JobStorage
     /// <summary>
     /// 订阅管道
     /// </summary>
-    internal string SubscriptionChannel => _subscription.Channel;
+    internal string SubscriptionChannel => _subscription.Value.Channel;
 
     /// <summary>
     /// LIFO(后进先出)队列
@@ -90,9 +110,20 @@ public class RedisStorage : JobStorage
     public override IMonitoringApi GetMonitoringApi() => new RedisMonitoringApi(this, RedisClient);
 
     /// <summary>
+    /// 获取存储特性
+    /// </summary>
+    /// <param name="featureId">特性标识</param>
+    public override bool HasFeature([NotNull] string featureId)
+    {
+        if (featureId == null)
+            throw new ArgumentNullException(nameof(featureId));
+        return SupportedFeatures.Contains(featureId) || base.HasFeature(featureId);
+    }
+
+    /// <summary>
     /// 获取存储连接
     /// </summary>
-    public override IStorageConnection GetConnection() => new RedisConnection(this, RedisClient, _subscription, _options.FetchTimeout);
+    public override IStorageConnection GetConnection() => new RedisConnection(this, RedisClient, _subscription.Value, _options.FetchTimeout);
 
     /// <summary>
     /// 获取组件集合
@@ -101,7 +132,7 @@ public class RedisStorage : JobStorage
     {
         yield return new FetchedJobsWatcher(this, _options.InvisibilityTimeout);
         yield return new ExpiredJobsWatcher(this, _options.ExpiryCheckInterval);
-        yield return _subscription;
+        yield return _subscription.Value;
     }
 
     /// <summary>
@@ -128,6 +159,24 @@ public class RedisStorage : JobStorage
     /// 输出字符串
     /// </summary>
     public override string ToString() => RedisClient.ToString();
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        if (_subscription.IsValueCreated)
+            _subscription.Value.Dispose();
+
+        if (_ownsRedisClient)
+            RedisClient.Dispose();
+
+        _disposed = true;
+        GC.SuppressFinalize(this);
+    }
+
+    private Lazy<RedisSubscription> CreateSubscriptionFactory() =>
+        new Lazy<RedisSubscription>(() => new RedisSubscription(this, RedisClient), LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>
     /// 获取Redis缓存键

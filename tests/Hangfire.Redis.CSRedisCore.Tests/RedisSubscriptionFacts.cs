@@ -6,7 +6,7 @@ using Xunit;
 namespace Hangfire.Redis.Tests
 {
     [CleanRedis]
-    public class RedisSubscriptionFacts
+    public class RedisSubscriptionFacts : IDisposable
     {
         private readonly CancellationTokenSource _cts;
         private readonly RedisStorage _storage;
@@ -19,6 +19,8 @@ namespace Hangfire.Redis.Tests
             _storage = new RedisStorage(RedisUtils.RedisClient, options);
 
         }
+
+        public void Dispose() => _storage.Dispose();
 
         [Fact]
         public void Ctor_ThrowAnException_WhenStorageIsNull()
@@ -38,7 +40,7 @@ namespace Hangfire.Redis.Tests
         {
             //Arrange
             Stopwatch sw = new Stopwatch();
-            var subscription = new RedisSubscription(_storage, RedisUtils.RedisClient);
+            using var subscription = new RedisSubscription(_storage, RedisUtils.RedisClient);
             var timeout = TimeSpan.FromMilliseconds(100);
             sw.Start();
 

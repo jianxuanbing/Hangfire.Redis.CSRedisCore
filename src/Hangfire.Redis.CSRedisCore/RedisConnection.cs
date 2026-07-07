@@ -16,6 +16,19 @@ namespace Hangfire.Redis;
 /// </summary>
 internal class RedisConnection : JobStorageConnection
 {
+    private static readonly HashSet<string> ReservedJobFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "Arguments",
+        "Checked",
+        "CreatedAt",
+        "Fetched",
+        "Method",
+        "ParameterTypes",
+        "Queue",
+        "State",
+        "Type"
+    };
+
     /// <summary>
     /// Redis存储
     /// </summary>
@@ -109,6 +122,9 @@ internal class RedisConnection : JobStorageConnection
             { "Arguments", invocationData.Arguments },
             { "CreatedAt", JobHelper.SerializeDateTime(createdAt) }
         };
+
+        if (!string.IsNullOrWhiteSpace(invocationData.Queue))
+            storedParameters["Queue"] = invocationData.Queue;
 
         RedisClient.StartPipe()
             .HMSet(_storage.GetRedisKey($"job:{jobId}"), storedParameters.DicToObjectArray())
@@ -244,15 +260,16 @@ internal class RedisConnection : JobStorageConnection
         if (storedData.Count == 0)
             return null;
 
-        var type = storedData.FirstOrDefault(x => x.Key == "Type").Value;
-        var method = storedData.FirstOrDefault(x => x.Key == "Method").Value;
-        var parameterTypes = storedData.FirstOrDefault(x => x.Key == "ParameterTypes").Value;
-        var arguments = storedData.FirstOrDefault(x => x.Key == "Arguments").Value;
-        var createdAt = storedData.FirstOrDefault(x => x.Key == "CreatedAt").Value;
+        storedData.TryGetValue("Type", out var type);
+        storedData.TryGetValue("Method", out var method);
+        storedData.TryGetValue("ParameterTypes", out var parameterTypes);
+        storedData.TryGetValue("Arguments", out var arguments);
+        storedData.TryGetValue("CreatedAt", out var createdAt);
+        storedData.TryGetValue("Queue", out var queue);
 
         Job job = null;
         JobLoadException loadException = null;
-        var invocationData = new InvocationData(type, method, parameterTypes, arguments);
+        var invocationData = new InvocationData(type, method, parameterTypes, arguments, queue);
 
         try
         {
@@ -266,8 +283,12 @@ internal class RedisConnection : JobStorageConnection
         return new JobData
         {
             Job = job,
-            State = storedData.FirstOrDefault(x => x.Key == "State").Value,
+            InvocationData = invocationData,
+            State = storedData.TryGetValue("State", out var state) ? state : null,
             CreatedAt = JobHelper.DeserializeNullableDateTime(createdAt) ?? DateTime.MinValue,
+            ParametersSnapshot = storedData
+                .Where(x => !ReservedJobFields.Contains(x.Key))
+                .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase),
             LoadException = loadException
         };
     }
@@ -361,6 +382,17 @@ internal class RedisConnection : JobStorageConnection
         if (name == null)
             throw new ArgumentNullException(nameof(name));
         return RedisClient.HGet(_storage.GetRedisKey(key), name);
+    }
+
+    /// <summary>
+    /// 获取 Redis 服务端 UTC 时间
+    /// </summary>
+    public override DateTime GetUtcDateTime()
+    {
+        var serverTimes = RedisClient.NodesServerManager.Time();
+        if (serverTimes == null || serverTimes.Length == 0)
+            throw new InvalidOperationException("Unable to retrieve Redis server time.");
+        return serverTimes[0].Item2;
     }
 
     /// <summary>

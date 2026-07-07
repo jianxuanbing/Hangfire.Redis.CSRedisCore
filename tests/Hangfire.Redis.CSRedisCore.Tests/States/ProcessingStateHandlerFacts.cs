@@ -7,7 +7,7 @@ using Xunit;
 namespace Hangfire.Redis.Tests.States
 {
     [CleanRedis, Collection("Sequential")]
-    public class ProcessingStateHandlerFacts
+    public class ProcessingStateHandlerFacts : System.IDisposable
     {
         private const string JobId = "1";
 
@@ -19,6 +19,8 @@ namespace Hangfire.Redis.Tests.States
             _context = new ApplyStateContextMock(JobId);
             _transaction = new Mock<IWriteOnlyTransaction>();
         }
+
+        public void Dispose() => _context.Dispose();
 
         [Fact]
         public void StateName_ShouldBeEqualToProcessingState()

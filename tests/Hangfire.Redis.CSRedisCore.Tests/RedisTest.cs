@@ -1,5 +1,7 @@
 ﻿using Xunit;
 
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace Hangfire.Redis.Tests
 {
     public class RedisTest

@@ -7,19 +7,24 @@ namespace Hangfire.Redis.Tests
 {
     public class CleanRedisAttribute : BeforeAfterTestAttribute
     {
-        private static readonly object GlobalLock = new object();
+        private static readonly SemaphoreSlim GlobalLock = new SemaphoreSlim(1, 1);
+        private bool _lockAcquired;
 
         public override void Before(MethodInfo methodUnderTest)
         {
-            Monitor.Enter(GlobalLock);
+            GlobalLock.Wait();
+            _lockAcquired = true;
             var client = RedisUtils.RedisClient;
             client.NodesServerManager.FlushDb();
         }
 
         public override void After(MethodInfo methodUnderTest)
         {
-            if(Monitor.IsEntered(GlobalLock))
-                Monitor.Exit(GlobalLock);
+            if (_lockAcquired)
+            {
+                _lockAcquired = false;
+                GlobalLock.Release();
+            }
         }
     }
 }

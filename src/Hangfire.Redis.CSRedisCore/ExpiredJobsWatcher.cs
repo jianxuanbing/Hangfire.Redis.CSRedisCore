@@ -14,11 +14,6 @@ namespace Hangfire.Redis;
 internal class ExpiredJobsWatcher : IServerComponent
 {
     /// <summary>
-    /// 日志
-    /// </summary>
-    private static readonly ILog Logger = LogProvider.For<ExpiredJobsWatcher>();
-
-    /// <summary>
     /// Redis存储
     /// </summary>
     private readonly RedisStorage _storage;
@@ -66,7 +61,7 @@ internal class ExpiredJobsWatcher : IServerComponent
                 if (count == 0)
                     continue;
 
-                Logger.InfoFormat("Removing expired records from the '{0}' list...", key);
+                LogInfo("Removing expired records from the '{0}' list...", key);
                 const int batchSize = 100;
                 var keysToRemove = new List<string>();
                 for (var last = count - 1; last >= 0; last -= batchSize)
@@ -85,7 +80,7 @@ internal class ExpiredJobsWatcher : IServerComponent
                 if (keysToRemove.Count == 0)
                     continue;
 
-                Logger.InfoFormat("Removing {0} expired jobs from '{1}' list...", keysToRemove.Count, key);
+                LogInfo("Removing {0} expired jobs from '{1}' list...", keysToRemove.Count, key);
                 using (var transaction = connection.CreateWriteTransaction())
                 {
                     foreach (var jobId in keysToRemove)
@@ -101,4 +96,21 @@ internal class ExpiredJobsWatcher : IServerComponent
     /// 输出字符串
     /// </summary>
     public override string ToString() => GetType().ToString();
+
+    private static void LogInfo(string message, params object[] args) =>
+        TryLog(logger => logger.InfoFormat(message, args));
+
+    private static void TryLog(Action<ILog> write)
+    {
+        try
+        {
+            write(LogProvider.GetLogger(typeof(ExpiredJobsWatcher)));
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (TypeInitializationException ex) when (ex.InnerException is ObjectDisposedException)
+        {
+        }
+    }
 }

@@ -7,7 +7,7 @@ using Xunit;
 namespace Hangfire.Redis.Tests
 {
     [CleanRedis]
-    public class ExpiredJobsWatcherFacts
+    public class ExpiredJobsWatcherFacts : IDisposable
     {
         private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(1);
 
@@ -21,6 +21,8 @@ namespace Hangfire.Redis.Tests
             _cts = new CancellationTokenSource();
             _cts.Cancel();
         }
+
+        public void Dispose() => _storage.Dispose();
 
         [Fact]
         public void Ctor_ThrowsAnException_WhenStorageIsNull()
@@ -43,7 +45,7 @@ namespace Hangfire.Redis.Tests
                 () => new ExpiredJobsWatcher(_storage, TimeSpan.FromSeconds(-1)));
         }
 
-        [Fact, CleanRedis]
+        [Fact]
         public void Execute_DeletesNonExistingJobs()
         {
             var redis = RedisUtils.RedisClient;
@@ -65,7 +67,7 @@ namespace Hangfire.Redis.Tests
             Assert.Equal(0, redis.LLen("{hangfire}:deleted"));
         }
 
-        [Fact, CleanRedis]
+        [Fact]
         public void Execute_DoesNotDeleteExistingJobs()
         {
             var redis = RedisUtils.RedisClient;

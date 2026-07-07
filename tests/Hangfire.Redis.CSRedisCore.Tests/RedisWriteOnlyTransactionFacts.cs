@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Hangfire.Redis.Tests
 {
-    public class RedisWriteOnlyTransactionFacts
+    public class RedisWriteOnlyTransactionFacts : IDisposable
     {
         private readonly RedisStorage _storage;
 
@@ -16,6 +16,8 @@ namespace Hangfire.Redis.Tests
             var options = new RedisStorageOptions();
             _storage = new RedisStorage(RedisUtils.RedisClient, options);
         }
+
+        public void Dispose() => _storage.Dispose();
 
         [Fact]
         public void Ctor_ThrowsAnException_WhenStorageIsNull()

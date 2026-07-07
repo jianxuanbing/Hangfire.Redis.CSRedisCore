@@ -17,11 +17,6 @@ internal class FetchedJobsWatcher : IServerComponent
     private readonly TimeSpan _invisibilityTimeout;
 
     /// <summary>
-    /// 日志
-    /// </summary>
-    private static readonly ILog Logger = LogProvider.GetLogger(typeof(FetchedJobsWatcher));
-
-    /// <summary>
     /// Redis存储
     /// </summary>
     private readonly RedisStorage _storage;
@@ -76,10 +71,10 @@ internal class FetchedJobsWatcher : IServerComponent
     private void ProcessQueue(string queue, RedisConnection connection)
     {
         // 一次仅允许一台服务器处理指定队列中的超时作业。
-        Logger.DebugFormat("Acquiring the lock for the fetched list of the '{0}' queue...", queue);
+        LogDebug("Acquiring the lock for the fetched list of the '{0}' queue...", queue);
         using (connection.RedisClient.Lock(_storage.GetRedisKey($"queue:{queue}:dequeued:lock"), (int)_options.FetchedLockTimeout.TotalSeconds))
         {
-            Logger.DebugFormat("Looking for timed out jobs in the '{0}' queue...", queue);
+            LogDebug("Looking for timed out jobs in the '{0}' queue...", queue);
             var jobIds = connection.RedisClient.LRange(_storage.GetRedisKey($"queue:{queue}:dequeued"), 0, -1);
             var requeued = 0;
             foreach (var jobId in jobIds)
@@ -88,12 +83,32 @@ internal class FetchedJobsWatcher : IServerComponent
                     requeued++;
             }
             if (requeued == 0)
-                Logger.DebugFormat("No timed out jobs were found in the '{0}' queue", queue);
+                LogDebug("No timed out jobs were found in the '{0}' queue", queue);
             else
-                Logger.InfoFormat(
+                LogInfo(
                     "{0} timed out jobs were found in the '{1}' queue and re-queued.",
                     requeued,
                     queue);
+        }
+    }
+
+    private static void LogDebug(string message, params object[] args) =>
+        TryLog(logger => logger.DebugFormat(message, args));
+
+    private static void LogInfo(string message, params object[] args) =>
+        TryLog(logger => logger.InfoFormat(message, args));
+
+    private static void TryLog(Action<ILog> write)
+    {
+        try
+        {
+            write(LogProvider.GetLogger(typeof(FetchedJobsWatcher)));
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (TypeInitializationException ex) when (ex.InnerException is ObjectDisposedException)
+        {
         }
     }
 
